@@ -47,6 +47,21 @@ validate Vulkan device enumeration. A Linux build host needs the SDK's stated
 toolchain plus SDL3 and Vulkan development/runtime components, and a Vulkan
 capable GPU/driver for runtime verification.
 
+## SDK bootstrap
+
+On Linux x86_64 with Git, Clang 20+, CMake 3.25+, Ninja, the ReXGlue Linux
+development dependencies, and Vulkan headers/tools installed, run:
+
+```sh
+./scripts/bootstrap-sdk-linux.sh
+```
+
+The script pins ReXGlue v0.10.0 by commit, checks out its recursive submodules,
+explicitly disables D3D12 and enables Vulkan, and installs both Release and
+RelWithDebInfo SDK configurations under the ignored `third_party/` directory.
+It does not need or read Fracture game files. The app build wiring remains
+pending source reuse permission.
+
 ## Port sequence
 
 1. Obtain upstream source reuse permission (or wait for a suitable upstream

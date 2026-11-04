@@ -6,7 +6,7 @@ This repository is an independent port. It does not include game data. Use files
 
 ## Status
 
-The upstream source has been inspected for architecture and porting requirements. Implementation is waiting on permission to reuse upstream code and the extracted game files needed for a real build and runtime baseline.
+The ReXGlue Linux/Vulkan SDK bootstrap is in place. Game implementation is waiting on permission to reuse upstream code and the extracted game files needed for a real build and runtime baseline.
 
 ## Goals
 
