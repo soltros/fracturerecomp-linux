@@ -1,0 +1,22 @@
+# User-owned game files and generated recompilation output
+/game/
+/xex/
+/generated/
+/third_party/
+/out/
+/build/
+
+# Local config, settings, logs, and runtime output
+/fracture.toml
+/settings.toml
+/logs/
+/saves/
+/shader_cache/
+
+# Common local build/editor output
+CMakeUserPresets.json
+.cache/
+.vscode/
+.idea/
+*.user
+*.swp
