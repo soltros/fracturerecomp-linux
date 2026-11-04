@@ -1,11 +1,9 @@
 # Linux porting notes
 
-These notes come from inspecting the public upstream repository at
-`ASarafanov/fracturerecomp` (default branch `master`, HEAD
-`5132ba71e417da55f8047d4bebae4c43aab5b223`). No upstream source is copied in
-this repository. GitHub reports no declared license for upstream, so source
-reuse requires permission from its author or an upstream license that allows
-this derivative work.
+These notes track the source imported from `ASarafanov/fracturerecomp`, default
+branch `master`, commit `5132ba71e417da55f8047d4bebae4c43aab5b223`. The port
+maintainer confirmed permission to port the source. The upstream repository
+has no declared license; see [UPSTREAM.md](UPSTREAM.md) for attribution.
 
 ## Architecture observed upstream
 
@@ -59,21 +57,19 @@ development dependencies, and Vulkan headers/tools installed, run:
 The script pins ReXGlue v0.10.0 by commit, checks out its recursive submodules,
 explicitly disables D3D12 and enables Vulkan, and installs both Release and
 RelWithDebInfo SDK configurations under the ignored `third_party/` directory.
-It does not need or read Fracture game files. The app build wiring remains
-pending source reuse permission.
+It does not need or read Fracture game files. The app build wiring still needs
+to be made Linux-ready.
 
 ## Port sequence
 
-1. Obtain upstream source reuse permission (or wait for a suitable upstream
-   license) and import the baseline with attribution and license notices.
-2. Add a Linux build/setup path that builds the pinned ReXGlue SDK with Vulkan
+1. Add a Linux build/setup path that builds the pinned ReXGlue SDK with Vulkan
    and produces host plus generated game module(s) on Linux.
-3. Port filesystem locations, executable restart, file selection, GPU listing,
+2. Port filesystem locations, executable restart, file selection, GPU listing,
    input, and any remaining Win32 calls to native Linux/SDL equivalents.
-4. Make Vulkan mandatory on Linux, including GPU selection and actionable
+3. Make Vulkan mandatory on Linux, including GPU selection and actionable
    startup diagnostics; preserve the Windows backend behavior in any shared
    source port.
-5. Build against the user-provided extracted game files, then verify install,
+4. Build against the user-provided extracted game files, then verify install,
    launch, settings, input, audio, saves, and gameplay against the upstream
    behavior on a Linux Vulkan system.
 

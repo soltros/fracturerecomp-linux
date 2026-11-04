@@ -2,11 +2,11 @@
 
 A native Linux port of [ASarafanov/fracturerecomp](https://github.com/ASarafanov/fracturerecomp), targeting Vulkan as the graphics backend.
 
-This repository is an independent port. It does not include game data. Use files extracted from a legally owned copy of Fracture; no copyrighted game files should be committed or distributed here. Upstream currently has no declared license, so its source must not be copied here unless the author grants permission or adds a license that permits the port.
+This repository is an independent Linux port of [ASarafanov/fracturerecomp](https://github.com/ASarafanov/fracturerecomp), imported with the permission confirmed by the port maintainer. Upstream has no declared license; see [UPSTREAM.md](UPSTREAM.md) for the imported revision and attribution. This repository does not include game data. Keep files extracted from a legally owned copy outside version control; no copyrighted game files should be committed or distributed here.
 
 ## Status
 
-The ReXGlue Linux/Vulkan SDK bootstrap is in place. Game implementation is waiting on permission to reuse upstream code and the extracted game files needed for a real build and runtime baseline.
+The upstream source baseline is present and Linux platform work is underway. The extracted game files are still needed to generate and build the game module and establish a runtime baseline.
 
 ## Goals
 
@@ -22,4 +22,4 @@ See [PORTING.md](PORTING.md) for the observed build structure, platform boundari
 ## Upstream
 
 - Project: [ASarafanov/fracturerecomp](https://github.com/ASarafanov/fracturerecomp)
-- Original project and contributor licenses remain applicable to any source incorporated into this port. See `LICENSE` and attribution notices once upstream source is brought in.
+- Source baseline: `5132ba71e417da55f8047d4bebae4c43aab5b223`.
