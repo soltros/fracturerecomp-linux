@@ -13,8 +13,11 @@ this derivative work.
   code. `cmake/fracture_recomp.cmake` generates separate game modules for v1
   and v2 from each user's `default.xex`.
 - The setup script is Windows-only (`setup.bat`) and currently builds the SDK
-  with both D3D12 and Vulkan plugins. Linux needs an equivalent reproducible
-  SDK build/install path and a Linux CMake preset.
+  with both D3D12 and Vulkan plugins. The pinned ReXGlue v0.10.0 SDK itself
+  already supports Linux, ships Linux AMD64 and ARM64 CMake presets, and
+  enables Vulkan by default on Linux (D3D12 is Windows-only). The port needs a
+  Linux setup/install path for that existing SDK support, not a new SDK
+  backend.
 - The game renderer already has a Vulkan selection path, but the current app
   can fall back to D3D12. Linux must select Vulkan as its required backend and
   report a clear error if Vulkan or a compatible device is unavailable.
@@ -24,6 +27,10 @@ this derivative work.
   XInput polling, executable/module path lookup, and UTF-16 path handling.
 - Controller handling already offers SDL in the settings UI; the Linux port
   should use SDL consistently instead of direct XInput paths.
+
+The inspected SDK revision is `f5337cdc947ff6d4c4196737e2c807a48f2a1fc2`
+(tag `v0.10.0`). Its license is BSD-style with Xenia-derived notices; retain
+the SDK's `LICENSE` and third-party notices if its source is built or bundled.
 
 ## Port sequence
 
