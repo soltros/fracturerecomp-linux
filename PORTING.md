@@ -27,10 +27,25 @@ this derivative work.
   XInput polling, executable/module path lookup, and UTF-16 path handling.
 - Controller handling already offers SDL in the settings UI; the Linux port
   should use SDL consistently instead of direct XInput paths.
+- The non-Windows branches are mostly explicit stubs today: game module loading
+  reports Windows-only, restart is unimplemented, Vulkan GPU enumeration
+  returns no devices, installer browse reports only drag-and-drop, installer
+  pad navigation returns no input, and menu-hook discovery returns null.
+  Merely compiling the existing non-Windows target would not provide a usable
+  Linux game.
 
 The inspected SDK revision is `f5337cdc947ff6d4c4196737e2c807a48f2a1fc2`
 (tag `v0.10.0`). Its license is BSD-style with Xenia-derived notices; retain
 the SDK's `LICENSE` and third-party notices if its source is built or bundled.
+
+## Build host snapshot
+
+At the time these notes were updated, this workspace did not have `clang++`,
+`cmake`, `ninja`, `pkg-config`, or `vulkaninfo` on `PATH`; Python 3.12.15 was
+available. This environment therefore cannot currently build the SDK or
+validate Vulkan device enumeration. A Linux build host needs the SDK's stated
+toolchain plus SDL3 and Vulkan development/runtime components, and a Vulkan
+capable GPU/driver for runtime verification.
 
 ## Port sequence
 
