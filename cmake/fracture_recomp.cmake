@@ -115,6 +115,10 @@ foreach(_release ${_fracture_releases})
         set_target_properties(fracture_${_release} PROPERTIES
             CXX_VISIBILITY_PRESET hidden
         )
+        if(UNIX AND NOT APPLE)
+            # The host resolves fracture_<release>.so alongside its executable.
+            set_target_properties(fracture_${_release} PROPERTIES PREFIX "")
+        endif()
         # Next to the host exe, which depends on it.
         rexglue_configure_module_target(fracture_${_release} HOST fracture)
         list(APPEND FRACTURE_GAME_TARGETS fracture_${_release})

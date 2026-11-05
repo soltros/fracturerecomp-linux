@@ -6,7 +6,10 @@ This repository is an independent Linux port of [ASarafanov/fracturerecomp](http
 
 ## Status
 
-The upstream source baseline is present and Linux platform work is underway. The extracted game files are still needed to generate and build the game module and establish a runtime baseline.
+The upstream baseline and native Linux platform path are in place. The v2
+release has generated and built on Linux x86_64, and its Vulkan game window is
+running with user-provided game files. Broader behavior and fidelity checks are
+still in progress.
 
 ## Goals
 

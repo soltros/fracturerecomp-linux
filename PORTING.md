@@ -36,14 +36,19 @@ The inspected SDK revision is `f5337cdc947ff6d4c4196737e2c807a48f2a1fc2`
 (tag `v0.10.0`). Its license is BSD-style with Xenia-derived notices; retain
 the SDK's `LICENSE` and third-party notices if its source is built or bundled.
 
-## Build host snapshot
+## Linux runtime checkpoint
 
-At the time these notes were updated, this workspace did not have `clang++`,
-`cmake`, `ninja`, `pkg-config`, or `vulkaninfo` on `PATH`; Python 3.12.15 was
-available. This environment therefore cannot currently build the SDK or
-validate Vulkan device enumeration. A Linux build host needs the SDK's stated
-toolchain plus SDL3 and Vulkan development/runtime components, and a Vulkan
-capable GPU/driver for runtime verification.
+On 2026-11-05, the v2 `default.xex` generated and compiled successfully with
+the pinned ReXGlue 0.10.0 SDK on Linux x86_64. The host selected SDL's Wayland
+video driver, loaded `fracture_v2.so`, and opened the game with Vulkan on the
+maintainer's NixOS desktop. The maintainer confirmed gameplay in the window.
+This establishes a first native runtime checkpoint; it does not yet establish
+full feature or visual parity.
+
+The checked build used Clang 20, CMake 4.4, Ninja, Vulkan, SDL3, X11, and
+Wayland development dependencies. The SDK's SDL build must include the system's
+Wayland or X11 video driver. On NixOS, run the app in an environment that makes
+the dynamic SDL backend libraries and Vulkan loader available at runtime.
 
 ## SDK bootstrap
 
@@ -57,21 +62,19 @@ development dependencies, and Vulkan headers/tools installed, run:
 The script pins ReXGlue v0.10.0 by commit, checks out its recursive submodules,
 explicitly disables D3D12 and enables Vulkan, and installs both Release and
 RelWithDebInfo SDK configurations under the ignored `third_party/` directory.
-It does not need or read Fracture game files. The app build wiring still needs
-to be made Linux-ready.
+It does not need or read Fracture game files.
 
 ## Port sequence
 
-1. Add a Linux build/setup path that builds the pinned ReXGlue SDK with Vulkan
-   and produces host plus generated game module(s) on Linux.
+1. Exercise the setup path from a clean Linux checkout and document any
+   distribution-specific SDK dependencies.
 2. Port filesystem locations, executable restart, file selection, GPU listing,
    input, and any remaining Win32 calls to native Linux/SDL equivalents.
 3. Make Vulkan mandatory on Linux, including GPU selection and actionable
    startup diagnostics; preserve the Windows backend behavior in any shared
    source port.
-4. Build against the user-provided extracted game files, then verify install,
-   launch, settings, input, audio, saves, and gameplay against the upstream
-   behavior on a Linux Vulkan system.
+4. Compare install, settings, input, audio, saves, and gameplay against the
+   upstream behavior on a Linux Vulkan system, and address any differences.
 
 The complete goal remains a 1:1 native Linux run. The extracted game files
 are user-provided inputs and must remain untracked and undistributed.

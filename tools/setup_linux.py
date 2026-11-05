@@ -48,12 +48,8 @@ def stage_extracted_files(source):
     release_dir.mkdir(parents=True, exist_ok=True)
     xex_link = release_dir / "default.xex"
     if xex_link.is_symlink():
-        if xex_link.resolve() != xex:
-            xex_link.unlink()
-        else:
-            xex_link.unlink()
-            shutil.copy2(xex, xex_link)
-    elif xex_link.exists():
+        xex_link.unlink()
+    if xex_link.exists():
         if hashlib.sha256(xex_link.read_bytes()).hexdigest() != digest:
             raise SystemExit(f"Refusing to replace a different local file at {xex_link}")
     else:
@@ -67,7 +63,9 @@ def stage_extracted_files(source):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("game_directory", type=Path, help="folder containing default.xex and resources/")
+    parser.add_argument(
+        "game_directory", type=Path, help="folder containing default.xex and resources/"
+    )
     parser.add_argument("--config", choices=("debug", "release", "relwithdebinfo"), default="relwithdebinfo")
     args = parser.parse_args()
 
