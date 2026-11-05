@@ -15,7 +15,7 @@
 find_package(rexglue 0.10.0 QUIET CONFIG)
 if(NOT rexglue_FOUND)
     message(FATAL_ERROR
-        "ReXGlue SDK not found. Run setup.bat, or put the SDK install on "
+        "ReXGlue SDK not found. Run the platform setup command, or put the SDK install on "
         "CMAKE_PREFIX_PATH")
 endif()
 message(STATUS "Found ReXGlue SDK ${REXGLUE_VERSION_STRING} at ${rexglue_DIR}")
@@ -61,8 +61,8 @@ if(NOT _fracture_releases)
 endif()
 if(NOT _fracture_releases)
     message(FATAL_ERROR
-        "Neither xex/v1/default.xex nor xex/v2/default.xex exists. Run setup.bat "
-        "with your disc image; it puts the game's default.xex there.")
+        "Neither xex/v1/default.xex nor xex/v2/default.xex exists. Run the platform setup "
+        "command with your disc image or extracted game directory.")
 endif()
 message(STATUS "Fracture: game code for ${_fracture_releases}")
 

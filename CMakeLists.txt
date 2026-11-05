@@ -37,4 +37,6 @@ if(WIN32)
     target_link_libraries(fracture PRIVATE dxgi ole32 shell32 uuid)
     # UTF-8 as the process code page, merged into the linker's manifest.
     target_sources(fracture PRIVATE src/fracture.manifest)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(fracture PRIVATE ${CMAKE_DL_LIBS})
 endif()

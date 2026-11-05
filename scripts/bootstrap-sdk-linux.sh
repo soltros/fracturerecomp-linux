@@ -19,6 +19,8 @@ for tool in git cmake clang clang++; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is required; install the Linux ReXGlue build prerequisites first"
 done
 command -v ninja >/dev/null 2>&1 || fail "ninja is required by the ReXGlue linux-amd64 preset"
+clang_major="$(clang --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | head -n 1)"
+[[ -n "$clang_major" && "$clang_major" -ge 20 ]] || fail "Clang 20 or newer is required (found ${clang_major:-unknown})"
 
 if [[ "$(uname -s)" != Linux || "$(uname -m)" != x86_64 ]]; then
   fail "this bootstrap currently targets Linux x86_64"
@@ -37,14 +39,16 @@ fi
 # A prior interrupted clone may have missing submodules.
 git -C "$SDK_SOURCE" submodule update --init --recursive --depth 1 --jobs 8
 
-cmake --preset linux-amd64 \
-  -DREXGLUE_USE_D3D12=OFF \
-  -DREXGLUE_USE_VULKAN=ON \
-  "-DCMAKE_INSTALL_PREFIX=$SDK_PREFIX"
-
 jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '4')"
-cmake --build "$SDK_BUILD" --config Release --target install --parallel "$jobs"
-cmake --build "$SDK_BUILD" --config RelWithDebInfo --target install --parallel "$jobs"
+(
+  cd "$SDK_SOURCE"
+  cmake --preset linux-amd64 \
+    -DREXGLUE_USE_D3D12=OFF \
+    -DREXGLUE_USE_VULKAN=ON \
+    "-DCMAKE_INSTALL_PREFIX=$SDK_PREFIX"
+  cmake --build "$SDK_BUILD" --config Release --target install --parallel "$jobs"
+  cmake --build "$SDK_BUILD" --config RelWithDebInfo --target install --parallel "$jobs"
+)
 
 printf '\nReXGlue %s (Vulkan, Linux x86_64) installed at:\n%s\n' "$SDK_VERSION" "$SDK_PREFIX"
 printf 'Configure the app with: cmake -S . -B out/build/linux-amd64 -DCMAKE_PREFIX_PATH="%s"\n' "$SDK_PREFIX"

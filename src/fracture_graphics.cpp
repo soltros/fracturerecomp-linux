@@ -16,33 +16,42 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <dxgi.h>
+#elif defined(__linux__)
+#include <dlfcn.h>
 #endif
 
+#if defined(_WIN32)
 REXCVAR_DEFINE_STRING(fracture_graphics_api, "auto", "Fracture",
                       "Graphics API: auto (Vulkan under Proton / Wine, Direct3D 12 on "
                       "Windows), d3d12 or vulkan")
     .allowed({"auto", "d3d12", "vulkan"})
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+#else
+REXCVAR_DEFINE_STRING(fracture_graphics_api, "vulkan", "Fracture",
+                      "Graphics API: Vulkan (required on Linux)")
+    .allowed({"vulkan"})
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+#endif
 
 namespace fracture::graphics {
 namespace {
 
-std::string_view g_active_api = "d3d12";
+std::string_view g_active_api =
+#if defined(_WIN32)
+    "d3d12";
+#else
+    "vulkan";
+#endif
 
 #if defined(_WIN32)
 bool RunningUnderWine() {
   const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
   return ntdll && GetProcAddress(ntdll, "wine_get_version");
 }
-#else
-bool RunningUnderWine() {
-  return false;
-}
 #endif
 
 // Just enough of the Vulkan API to list physical devices through the system
-// loader, so the exe needs no Vulkan headers or import library (the prebuilt
-// SDK ships neither).
+// loader, so the executable does not need Vulkan headers or an import library.
 namespace vk {
 using Result = int32_t;
 using Instance = void*;
@@ -84,23 +93,35 @@ constexpr int32_t kDeviceTypeCpu = 4;
 
 std::vector<Gpu> EnumerateVulkanDevices() {
   std::vector<Gpu> devices;
+  vk::GetInstanceProcAddr get_proc = nullptr;
 #if defined(_WIN32)
   const HMODULE loader = LoadLibraryW(L"vulkan-1.dll");
   if (!loader) {
     return devices;
   }
-  const auto get_proc =
-      reinterpret_cast<vk::GetInstanceProcAddr>(GetProcAddress(loader, "vkGetInstanceProcAddr"));
-  const auto create =
-      get_proc ? reinterpret_cast<vk::CreateInstance>(get_proc(nullptr, "vkCreateInstance"))
-               : nullptr;
+  get_proc = reinterpret_cast<vk::GetInstanceProcAddr>(
+      GetProcAddress(loader, "vkGetInstanceProcAddr"));
+#elif defined(__linux__)
+  void* loader = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+  if (!loader) {
+    return devices;
+  }
+  get_proc = reinterpret_cast<vk::GetInstanceProcAddr>(dlsym(loader, "vkGetInstanceProcAddr"));
+#endif
+  const auto create = get_proc ? reinterpret_cast<vk::CreateInstance>(
+                                     get_proc(nullptr, "vkCreateInstance"))
+                               : nullptr;
   vk::Instance instance = nullptr;
   vk::ApplicationInfo app;
   app.application_name = "fracture";
   vk::InstanceCreateInfo info;
   info.application_info = &app;
   if (!create || create(&info, nullptr, &instance) != 0 || !instance) {
+#if defined(_WIN32)
     FreeLibrary(loader);
+#elif defined(__linux__)
+    dlclose(loader);
+#endif
     return devices;
   }
   const auto destroy =
@@ -127,7 +148,10 @@ std::vector<Gpu> EnumerateVulkanDevices() {
   if (destroy) {
     destroy(instance, nullptr);
   }
+#if defined(_WIN32)
   FreeLibrary(loader);
+#elif defined(__linux__)
+  dlclose(loader);
 #endif
   return devices;
 }
@@ -136,10 +160,11 @@ std::vector<Gpu> EnumerateVulkanDevices() {
 
 std::unique_ptr<rex::system::IGraphicsSystem> LoadPlugin(std::string_view plugin) {
   std::string api = REXCVAR_GET(fracture_graphics_api);
+  std::unique_ptr<rex::system::IGraphicsSystem> graphics;
+#if defined(_WIN32)
   if (api == "auto") {
     api = RunningUnderWine() ? "vulkan" : "d3d12";
   }
-  std::unique_ptr<rex::system::IGraphicsSystem> graphics;
   if (api == "vulkan") {
     if (VulkanDevices().empty()) {
       REXLOG_WARN("Graphics: no Vulkan driver or GPU found, using Direct3D 12");
@@ -156,6 +181,21 @@ std::unique_ptr<rex::system::IGraphicsSystem> LoadPlugin(std::string_view plugin
     graphics = rex::system::LoadGpuPlugin(plugin, "d3d12");
     g_active_api = "d3d12";
   }
+#else
+  if (api != "vulkan") {
+    REXLOG_WARN("Graphics: '{}' is unavailable on Linux; Vulkan is required", api);
+  }
+  if (VulkanDevices().empty()) {
+    REXLOG_ERROR("Graphics: no Vulkan driver or usable GPU was found on Linux");
+    return nullptr;
+  }
+  graphics = rex::system::LoadGpuPlugin(plugin, "vulkan");
+  if (!graphics) {
+    REXLOG_ERROR("Graphics: the {} GPU plugin has no working Vulkan backend", plugin);
+    return nullptr;
+  }
+  g_active_api = "vulkan";
+#endif
   if (graphics) {
     REXLOG_INFO("Graphics: {} ({} requested)", g_active_api,
                 REXCVAR_GET(fracture_graphics_api));

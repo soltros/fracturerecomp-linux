@@ -19,6 +19,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#elif defined(__linux__)
+#include <dlfcn.h>
 #endif
 
 REXCVAR_DEFINE_STRING(fracture_game_release, "", "Fracture",
@@ -32,7 +34,15 @@ namespace {
 const HostApi kHost = {kApiVersion, menu_input::GuestXamInputGetState, frame_rate::Interval};
 
 std::filesystem::path DllPath(const installer::Release& release) {
-  return rex::filesystem::GetExecutableFolder() / fmt::format("fracture_{}.dll", release.variant);
+#if defined(_WIN32)
+  constexpr std::string_view extension = ".dll";
+#elif defined(__APPLE__)
+  constexpr std::string_view extension = ".dylib";
+#else
+  constexpr std::string_view extension = ".so";
+#endif
+  return rex::filesystem::GetExecutableFolder() /
+         fmt::format("fracture_{}{}", release.variant, extension);
 }
 
 // game_data_root from a config file next to the exe, or "". The SDK loads
@@ -135,6 +145,33 @@ std::optional<rex::PPCImageInfo> Load(const installer::Release& release, std::st
     error = fmt::format("{} belongs to another version of fracture.exe.", PathText(path));
     return std::nullopt;
   }
+  REXLOG_INFO("Game code: {} ({})", PathText(path.filename()), release.name);
+  return *image_info();
+#elif defined(__linux__)
+  const std::filesystem::path path = DllPath(release);
+  void* module = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+  if (!module) {
+    const char* error_text = dlerror();
+    error = fmt::format("Could not load {}: {}", PathText(path),
+                        error_text ? error_text : "unknown dynamic loader error");
+    return std::nullopt;
+  }
+  dlerror();
+  const auto image_info = reinterpret_cast<ImageInfoFunc>(dlsym(module, kImageInfoExport));
+  const auto set_host = reinterpret_cast<SetHostFunc>(dlsym(module, kSetHostExport));
+  const char* symbol_error = dlerror();
+  if (symbol_error || !image_info || !set_host || !image_info()) {
+    error = fmt::format("{} is not a Fracture game module{}{}", PathText(path),
+                        symbol_error ? ": " : "", symbol_error ? symbol_error : "");
+    dlclose(module);
+    return std::nullopt;
+  }
+  if (!set_host(&kHost)) {
+    error = fmt::format("{} belongs to another version of fracture.", PathText(path));
+    dlclose(module);
+    return std::nullopt;
+  }
+  // The runtime keeps pointers into this module for the lifetime of the app.
   REXLOG_INFO("Game code: {} ({})", PathText(path.filename()), release.name);
   return *image_info();
 #else

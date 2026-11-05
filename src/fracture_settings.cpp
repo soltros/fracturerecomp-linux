@@ -13,16 +13,31 @@
 #include <toml++/toml.hpp>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
+#include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <cwctype>
 #include <fstream>
 #include <limits>
+#include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #if defined(_WIN32)
 #include <windows.h>
+#elif defined(__linux__)
+#include <cerrno>
+#include <csignal>
+#include <spawn.h>
+#include <thread>
+#include <unistd.h>
+#endif
+
+#if defined(__linux__)
+extern char** environ;
 #endif
 
 REXCVAR_DEFINE_UINT32(fracture_restart_wait_pid, 0, "Fracture",
@@ -427,6 +442,104 @@ void WaitForPreviousProcess() {
   // Back to the default, so a config save from this process (the F4
   // overlay's SaveConfig writes every non-default cvar) cannot persist the
   // pid and make every later start wait on it.
+  REXCVAR_SET(fracture_restart_wait_pid, 0);
+}
+
+#elif defined(__linux__)
+
+namespace {
+constexpr auto kRestartWait = std::chrono::seconds(20);
+constexpr auto kRestartPoll = std::chrono::milliseconds(10);
+
+bool IsRestartArgument(std::string_view arg, std::string_view name) {
+  return arg.starts_with(name) && (arg.size() == name.size() || arg[name.size()] == '=');
+}
+
+std::vector<std::string> CurrentArguments() {
+  std::ifstream input("/proc/self/cmdline", std::ios::binary);
+  std::vector<std::string> arguments;
+  std::string argument;
+  char byte = 0;
+  while (input.get(byte)) {
+    if (byte == '\0') {
+      arguments.push_back(std::move(argument));
+      argument.clear();
+    } else {
+      argument.push_back(byte);
+    }
+  }
+  if (!argument.empty()) {
+    arguments.push_back(std::move(argument));
+  }
+  return arguments;
+}
+
+bool ProcessIsZombie(uint32_t pid) {
+  std::ifstream stat(fmt::format("/proc/{}/stat", pid));
+  std::string line;
+  if (!std::getline(stat, line)) {
+    return false;
+  }
+  const size_t name_end = line.rfind(')');
+  return name_end != std::string::npos && name_end + 2 < line.size() && line[name_end + 2] == 'Z';
+}
+}  // namespace
+
+bool StartRestartedProcess(std::string_view game_release) {
+  std::array<char, 4096> exe_buffer{};
+  const ssize_t length = readlink("/proc/self/exe", exe_buffer.data(), exe_buffer.size() - 1);
+  if (length <= 0 || size_t(length) >= exe_buffer.size() - 1) {
+    REXLOG_ERROR("Restart: could not resolve the executable path: {}", std::strerror(errno));
+    return false;
+  }
+  const std::string exe_path(exe_buffer.data(), size_t(length));
+  std::vector<std::string> arguments = CurrentArguments();
+  if (arguments.empty()) {
+    arguments.push_back(exe_path);
+  } else {
+    arguments[0] = exe_path;
+  }
+  std::erase_if(arguments, [](const std::string& arg) {
+    return IsRestartArgument(arg, "--fracture_restart_wait_pid");
+  });
+  if (!game_release.empty()) {
+    std::erase_if(arguments, [](const std::string& arg) {
+      return IsRestartArgument(arg, "--fracture_game_release");
+    });
+    arguments.push_back(fmt::format("--fracture_game_release={}", game_release));
+  }
+  arguments.push_back(fmt::format("--fracture_restart_wait_pid={}", getpid()));
+
+  std::vector<char*> argv;
+  argv.reserve(arguments.size() + 1);
+  for (std::string& argument : arguments) {
+    argv.push_back(argument.data());
+  }
+  argv.push_back(nullptr);
+
+  pid_t child = 0;
+  const int spawn_error = posix_spawn(&child, exe_path.c_str(), nullptr, nullptr,
+                                      argv.data(), environ);
+  if (spawn_error != 0) {
+    REXLOG_ERROR("Restart: could not start {}: {}", exe_path, std::strerror(spawn_error));
+    return false;
+  }
+  REXLOG_INFO("Restart: started process {}", child);
+  return true;
+}
+
+void WaitForPreviousProcess() {
+  const uint32_t pid = REXCVAR_GET(fracture_restart_wait_pid);
+  if (pid == 0) {
+    return;
+  }
+  const auto deadline = std::chrono::steady_clock::now() + kRestartWait;
+  while (std::chrono::steady_clock::now() < deadline) {
+    if ((kill(pid_t(pid), 0) != 0 && errno == ESRCH) || ProcessIsZombie(pid)) {
+      break;
+    }
+    std::this_thread::sleep_for(kRestartPoll);
+  }
   REXCVAR_SET(fracture_restart_wait_pid, 0);
 }
 

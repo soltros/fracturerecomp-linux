@@ -21,6 +21,9 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <psapi.h>
+#elif defined(__linux__)
+#include <dlfcn.h>
+#include <link.h>
 #endif
 
 REXCVAR_DEFINE_STRING(fracture_menu_chord, "rb+start", "Fracture",
@@ -143,6 +146,32 @@ GuestFunction FindOriginal() {
       return reinterpret_cast<GuestFunction>(function);
     }
   }
+#elif defined(__linux__)
+  struct Search {
+    GuestFunction function = nullptr;
+    void* module = nullptr;
+  } search;
+  dl_iterate_phdr(
+      [](dl_phdr_info* info, size_t, void* opaque) {
+        auto& result = *static_cast<Search*>(opaque);
+        void* module = info->dlpi_name && *info->dlpi_name
+                           ? dlopen(info->dlpi_name, RTLD_NOW | RTLD_NOLOAD)
+                           : dlopen(nullptr, RTLD_NOW);
+        if (!module) {
+          return 0;
+        }
+        auto function = reinterpret_cast<GuestFunction>(
+            dlsym(module, "__imp__XamInputGetState"));
+        if (function) {
+          result.function = function;
+          result.module = module;  // keep the containing module loaded
+          return 1;
+        }
+        dlclose(module);
+        return 0;
+      },
+      &search);
+  return search.function;
 #endif
   return nullptr;
 }

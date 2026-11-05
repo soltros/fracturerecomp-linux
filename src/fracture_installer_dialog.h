@@ -16,6 +16,10 @@
 
 #include <imgui.h>
 
+#if defined(__linux__)
+struct SDL_Gamepad;
+#endif
+
 #include "fracture_installer.h"
 #include "fracture_settings_dialog.h"
 
@@ -25,8 +29,8 @@ namespace fracture::installer {
 // runtime starts when no game files are found: pick the disc image (or
 // drop it on the window) and the install folder, extract with a progress
 // bar, then play. Already extracted files can be used instead. Works with
-// the mouse, the keyboard and an XInput controller; the file choosers are
-// the system's own dialogs.
+// the mouse, the keyboard and a controller; file choosers use native dialogs
+// where the platform provides them.
 class InstallerDialog final : public rex::ui::ImGuiDialog, public rex::ui::WindowListener {
  public:
   struct Callbacks {
@@ -129,6 +133,10 @@ class InstallerDialog final : public rex::ui::ImGuiDialog, public rex::ui::Windo
   float pad_repeat_ = 0.0f;
   uint8_t pad_connected_ = 0;  // XInput slots that answered
   float pad_scan_ = 0.0f;      // seconds until empty slots are polled again
+#if defined(__linux__)
+  bool pad_subsystem_initialized_ = false;
+  std::vector<SDL_Gamepad*> pad_gamepads_;
+#endif
 };
 
 }  // namespace fracture::installer

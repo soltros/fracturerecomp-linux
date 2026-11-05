@@ -13,12 +13,17 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <iterator>
+#include <memory>
+#include <string>
 #include <utility>
 
 #if defined(_WIN32)
 #include <windows.h>
 #include <shobjidl.h>
 #include <xinput.h>
+#elif defined(__linux__)
+#include <SDL3/SDL.h>
 #endif
 
 namespace fracture::installer {
@@ -141,6 +146,20 @@ XInputGetStateFn XInputGetStateProc() {
   }();
   return proc;
 }
+#elif defined(__linux__)
+using PickerPromise = std::promise<std::optional<std::filesystem::path>>;
+
+void SDLCALL PickPathCallback(void* userdata, const char* const* files, int) {
+  std::unique_ptr<std::shared_ptr<PickerPromise>> holder(
+      static_cast<std::shared_ptr<PickerPromise>*>(userdata));
+  std::optional<std::filesystem::path> result;
+  if (files && files[0] && files[0][0]) {
+    result = std::filesystem::path(files[0]);
+  } else if (!files) {
+    REXLOG_WARN("Installer: SDL file dialog failed: {}", SDL_GetError());
+  }
+  (*holder)->set_value(std::move(result));
+}
 #endif
 
 }  // namespace
@@ -166,6 +185,12 @@ InstallerDialog::InstallerDialog(rex::ui::ImGuiDrawer* drawer, rex::ui::Window* 
       fonts_(fonts),
       callbacks_(std::move(callbacks)),
       initial_folder_(folder) {
+#if defined(__linux__)
+  pad_subsystem_initialized_ = SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+  if (!pad_subsystem_initialized_) {
+    REXLOG_WARN("Installer: SDL gamepad initialization failed: {}", SDL_GetError());
+  }
+#endif
   ImFontAtlas* atlas = GetIO().Fonts;
   ImFont* fallback = atlas->Fonts.empty() ? nullptr : atlas->Fonts[0];
   if (!fonts_.body) {
@@ -195,6 +220,14 @@ InstallerDialog::~InstallerDialog() {
   // The futures wait for their jobs when destroyed; extraction stops at its
   // next chunk and removes what it wrote.
   progress_.cancel = true;
+#if defined(__linux__)
+  for (SDL_Gamepad* gamepad : pad_gamepads_) {
+    SDL_CloseGamepad(gamepad);
+  }
+  if (pad_subsystem_initialized_) {
+    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+  }
+#endif
 }
 
 bool InstallerDialog::Busy() const {
@@ -275,10 +308,10 @@ void InstallerDialog::StartPick(Pick pick) {
   if (Busy()) {
     return;
   }
+  std::filesystem::path start;
 #if defined(_WIN32)
   pick_ = pick;
   void* owner = window_ ? window_->GetNativeWindowHandle() : nullptr;
-  std::filesystem::path start;
   std::wstring title;
   switch (pick) {
     case Pick::kDisc:
@@ -296,6 +329,37 @@ void InstallerDialog::StartPick(Pick pick) {
   }
   picker_ = std::async(std::launch::async, PickPath, owner, pick != Pick::kDisc, std::move(title),
                        std::move(start));
+#elif defined(__linux__)
+  pick_ = pick;
+  switch (pick) {
+    case Pick::kDisc:
+      start = disc_path_.empty() ? std::filesystem::path() : disc_path_.parent_path();
+      break;
+    case Pick::kInstallFolder:
+      start = folder_;
+      break;
+    case Pick::kGameFolder:
+      start = game_folder_.empty() ? folder_ : game_folder_;
+      break;
+  }
+  std::error_code path_error;
+  while (!start.empty() && !std::filesystem::is_directory(start, path_error)) {
+    const auto parent = start.parent_path();
+    start = parent == start ? std::filesystem::path() : parent;
+  }
+  const std::u8string location_u8 = start.empty() ? std::u8string() : start.u8string();
+  const std::string location(location_u8.begin(), location_u8.end());
+  const char* default_location = location.empty() ? nullptr : location.c_str();
+  auto promise = std::make_shared<PickerPromise>();
+  picker_ = promise->get_future();
+  auto* callback_promise = new std::shared_ptr<PickerPromise>(promise);
+  if (pick == Pick::kDisc) {
+    const SDL_DialogFileFilter filters[] = {{"Xbox 360 disc images", "iso"}, {"All files", "*"}};
+    SDL_ShowOpenFileDialog(PickPathCallback, callback_promise, nullptr, filters,
+                           int(std::size(filters)), default_location, false);
+  } else {
+    SDL_ShowOpenFolderDialog(PickPathCallback, callback_promise, nullptr, default_location, false);
+  }
 #else
   (void)pick;
   message_ = "Drop the disc image onto this window.";
@@ -524,6 +588,77 @@ int InstallerDialog::PadDirection(float delta_time, bool& confirm) {
   const int dy = ((pad.buttons & kDpadDown) || pad.thumb_ly < -kPadStickThreshold ? 1 : 0) -
                  ((pad.buttons & kDpadUp) || pad.thumb_ly > kPadStickThreshold ? 1 : 0);
   // What is held at the first read is not a press.
+  if (!pad_seen_) {
+    pad_seen_ = true;
+    pad_held_ = dy ? dy : dx;
+    pad_repeat_ = kPadRepeatDelay;
+    return 0;
+  }
+  confirm = (pressed & (kA | kStart)) != 0;
+  return Repeat(dy ? dy : dx, pad_held_, pad_repeat_, delta_time);
+#elif defined(__linux__)
+  if (!pad_subsystem_initialized_) {
+    return 0;
+  }
+  pad_scan_ -= delta_time;
+  if (pad_scan_ <= 0.0f) {
+    pad_scan_ = kPadScanInterval;
+    int count = 0;
+    SDL_JoystickID* ids = SDL_GetGamepads(&count);
+    for (int i = 0; ids && i < count; ++i) {
+      const bool already_open = std::any_of(
+          pad_gamepads_.begin(), pad_gamepads_.end(),
+          [id = ids[i]](SDL_Gamepad* gamepad) { return SDL_GetGamepadID(gamepad) == id; });
+      if (!already_open) {
+        if (SDL_Gamepad* gamepad = SDL_OpenGamepad(ids[i])) {
+          pad_gamepads_.push_back(gamepad);
+        }
+      }
+    }
+    SDL_free(ids);
+  }
+
+  SDL_UpdateGamepads();
+  using namespace menu_input;
+  Pad pad;
+  for (SDL_Gamepad* gamepad : pad_gamepads_) {
+    if (!SDL_GamepadConnected(gamepad)) {
+      continue;
+    }
+    auto button = [&](SDL_GamepadButton source, uint16_t target) {
+      if (SDL_GetGamepadButton(gamepad, source)) {
+        pad.buttons |= target;
+      }
+    };
+    button(SDL_GAMEPAD_BUTTON_DPAD_UP, kDpadUp);
+    button(SDL_GAMEPAD_BUTTON_DPAD_DOWN, kDpadDown);
+    button(SDL_GAMEPAD_BUTTON_DPAD_LEFT, kDpadLeft);
+    button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT, kDpadRight);
+    button(SDL_GAMEPAD_BUTTON_START, kStart);
+    button(SDL_GAMEPAD_BUTTON_BACK, kBack);
+    button(SDL_GAMEPAD_BUTTON_LEFT_STICK, kLeftThumb);
+    button(SDL_GAMEPAD_BUTTON_RIGHT_STICK, kRightThumb);
+    button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, kLeftShoulder);
+    button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, kRightShoulder);
+    button(SDL_GAMEPAD_BUTTON_SOUTH, kA);
+    button(SDL_GAMEPAD_BUTTON_EAST, kB);
+    button(SDL_GAMEPAD_BUTTON_WEST, kX);
+    button(SDL_GAMEPAD_BUTTON_NORTH, kY);
+    const int16_t lx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+    const int16_t ly = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+    if (std::abs(lx) > std::abs(pad.thumb_lx)) {
+      pad.thumb_lx = lx;
+    }
+    if (std::abs(ly) > std::abs(pad.thumb_ly)) {
+      pad.thumb_ly = ly;
+    }
+  }
+  const uint16_t pressed = pad.buttons & ~pad_prev_buttons_;
+  pad_prev_buttons_ = pad.buttons;
+  const int dx = ((pad.buttons & kDpadRight) || pad.thumb_lx > kPadStickThreshold ? 1 : 0) -
+                 ((pad.buttons & kDpadLeft) || pad.thumb_lx < -kPadStickThreshold ? 1 : 0);
+  const int dy = ((pad.buttons & kDpadDown) || pad.thumb_ly < -kPadStickThreshold ? 1 : 0) -
+                 ((pad.buttons & kDpadUp) || pad.thumb_ly > kPadStickThreshold ? 1 : 0);
   if (!pad_seen_) {
     pad_seen_ = true;
     pad_held_ = dy ? dy : dx;

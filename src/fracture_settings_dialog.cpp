@@ -14,8 +14,10 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <cfloat>
 #include <filesystem>
+#include <initializer_list>
 #include <string_view>
 #include <utility>
 
@@ -145,6 +147,35 @@ Fonts LoadFonts(ImFontAtlas* atlas) {
   fonts.body = load("segoeui.ttf", kBodyBakeSize);
   fonts.strong = load("seguisb.ttf", kBodyBakeSize);
   fonts.title = load("seguisb.ttf", kTitleBakeSize);
+#elif defined(__linux__)
+  static const ImWchar kRanges[] = {0x0020, 0x017F, 0x0400, 0x04FF, 0x2013, 0x2026,
+                                    0x2190, 0x2193, 0};
+  const std::array<std::filesystem::path, 4> font_dirs = {
+      "/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/truetype/liberation2",
+      "/usr/share/fonts/truetype/noto", "/run/current-system/sw/share/X11/fonts/truetype"};
+  auto load = [&](std::initializer_list<const char*> names, float size) -> ImFont* {
+    for (const auto& dir : font_dirs) {
+      for (const char* name : names) {
+        const auto path = dir / name;
+        if (!std::filesystem::exists(path)) {
+          continue;
+        }
+        const std::string text = path.string();
+        ImFontConfig config;
+        config.OversampleH = 2;
+        config.OversampleV = 1;
+        config.PixelSnapH = true;
+        return atlas->AddFontFromFileTTF(text.c_str(), size, &config, kRanges);
+      }
+    }
+    return nullptr;
+  };
+  fonts.body = load({"DejaVuSans.ttf", "LiberationSans-Regular.ttf", "NotoSans-Regular.ttf"},
+                    kBodyBakeSize);
+  fonts.strong = load({"DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "NotoSans-Bold.ttf"},
+                      kBodyBakeSize);
+  fonts.title = load({"DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "NotoSans-Bold.ttf"},
+                     kTitleBakeSize);
 #else
   (void)atlas;
 #endif
@@ -239,7 +270,8 @@ void SettingsDialog::BuildCategories() {
                                  "fast, go back to 30.",
                                  "fracture_frame_rate",
                                  {{"30 (Original)", "original"}, {"60 (Experimental)", "60"}}));
-  // Only on plugins built with Vulkan; the prebuilt SDK's is Direct3D 12 only.
+#if defined(_WIN32)
+  // Windows can use either backend when the plugin contains Vulkan support.
   if (graphics::PluginHasVulkan()) {
     graphics.rows.push_back(choice("Graphics API",
                                    "Direct3D 12 or Vulkan. Automatic uses Vulkan under Proton "
@@ -251,6 +283,10 @@ void SettingsDialog::BuildCategories() {
                                     {"Direct3D 12", "d3d12"},
                                     {"Vulkan", "vulkan"}}));
   }
+#else
+  graphics.rows.push_back(choice("Graphics API", "Vulkan is the required graphics backend on Linux.",
+                                 "fracture_graphics_api", {{"Vulkan", "vulkan"}}));
+#endif
   if (const auto gpus = vulkan ? graphics::VulkanDevices() : graphics::D3D12Adapters();
       !gpus.empty()) {
     std::vector<std::pair<std::string, std::string>> options = {{"Automatic", "-1"}};

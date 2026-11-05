@@ -13,6 +13,8 @@
 #include <rex/ui/keybinds.h>
 #include <rex/ui/window.h>
 
+#include <fmt/format.h>
+
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -21,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
@@ -35,6 +38,14 @@
 
 REXCVAR_DECLARE(std::string, fracture_dump_image);
 REXCVAR_DECLARE(std::string, fracture_dump_cvars);
+
+#if defined(_WIN32)
+inline constexpr std::string_view kGameModuleExtension = ".dll";
+#elif defined(__linux__)
+inline constexpr std::string_view kGameModuleExtension = ".so";
+#else
+inline constexpr std::string_view kGameModuleExtension = ".dylib";
+#endif
 
 class FractureApp : public rex::ReXApp {
  public:
@@ -69,8 +80,10 @@ class FractureApp : public rex::ReXApp {
     fracture::installer::SetAvailableReleases(available);
     bool forced = false;
     const auto* release = game::PickRelease(available, forced);
-    std::string error = "The game code (fracture_v1.dll or fracture_v2.dll) is missing next to "
-                        "fracture.exe. Unpack the whole download again.";
+    std::string error = fmt::format(
+        "The game code (fracture_v1{} or fracture_v2{}) is missing next to the app. "
+        "Run the platform setup command again.",
+        kGameModuleExtension, kGameModuleExtension);
     std::optional<rex::PPCImageInfo> image_info;
     if (release) {
       image_info = game::Load(*release, error);
@@ -92,6 +105,16 @@ class FractureApp : public rex::ReXApp {
     }
     if (!config.graphics) {
       config.graphics = fracture::graphics::LoadPlugin(config.gpu_plugin);
+#if defined(__linux__)
+      if (!config.graphics) {
+        constexpr char message[] =
+            "Fracture requires a working Vulkan driver and graphics device on Linux. "
+            "Install the system Vulkan driver and restart the game.";
+        REXLOG_ERROR("{}", message);
+        rex::ShowSimpleMessageBox(rex::SimpleMessageBoxType::Error, message);
+        std::exit(EXIT_FAILURE);
+      }
+#endif
     }
   }
 
@@ -220,7 +243,8 @@ class FractureApp : public rex::ReXApp {
   // before the window and the GPU plugin read their cvars.
   void OnPostInitLogging() override {
     // Create ran before the log file existed.
-    REXLOG_INFO("Game code: fracture_{}.dll, Fracture {}", release_.variant, release_.name);
+    REXLOG_INFO("Game code: fracture_{}{}, Fracture {}", release_.variant,
+                kGameModuleExtension, release_.name);
     fracture::settings::Load(base_config_path_);
   }
 
