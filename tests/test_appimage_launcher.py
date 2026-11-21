@@ -60,8 +60,12 @@ class LauncherTests(unittest.TestCase):
         self.root.geometry('780x710')
         self.root.update()
         self.snapshot('launcher-compact.png')
-        # Both primary actions must stay fully inside the smallest window.
-        for widget in (app.build, app.play):
-            self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
-                                 self.root.winfo_rooty() + self.root.winfo_height())
+        # Check ancestor bounds too: a button can be inside the window while
+        # still being clipped by its card at the minimum window size.
+        for widget in (app.build, app.play, app.cancel, app.details_button):
+            bottom = widget.winfo_rooty() + widget.winfo_height()
+            parent = widget.master
+            while parent is not None:
+                self.assertLessEqual(bottom, parent.winfo_rooty() + parent.winfo_height())
+                parent = parent.master
         app.process = None

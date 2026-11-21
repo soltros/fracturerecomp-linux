@@ -46,7 +46,7 @@ class Launcher:
         except tk.TclError:
             pass
         self.configure_styles()
-        shell = ttk.Frame(root, padding=(32, 24, 32, 20))
+        shell = ttk.Frame(root, padding=(32, 20, 32, 16))
         shell.pack(fill='both', expand=True)
 
         header = ttk.Frame(shell)
@@ -58,21 +58,21 @@ class Launcher:
         ttk.Label(header, text='FRACTURE  /  RECOMP', style='Brand.TLabel').pack(side='left')
         tk.Label(header, text='  ●  OFFLINE BUILDER  ', font=(FONT, 9, 'bold'),
                  fg=COLORS['green'], bg='#1b302e', padx=10, pady=7).pack(side='right')
-        ttk.Separator(shell).pack(fill='x', pady=(20, 23))
+        ttk.Separator(shell).pack(fill='x', pady=(14, 16))
         ttk.Label(shell, text='Build once. Play anytime.', style='Hero.TLabel').pack(anchor='w')
         self.label(shell, 'Bring your copy of Fracture. The tools are already here.',
-                   'Muted.TLabel').pack(anchor='w', pady=(7, 22))
+                   'Muted.TLabel').pack(anchor='w', pady=(6, 18))
 
         source = self.card(shell)
         self.label(source, '01  /  GAME FILES', 'Eyebrow.TLabel').pack(anchor='w')
-        self.label(source, 'Start with your copy', 'CardTitle.TLabel').pack(anchor='w', pady=(9, 5))
+        self.label(source, 'Start with your copy', 'CardTitle.TLabel').pack(anchor='w', pady=(7, 4))
         self.label(source, 'Choose an Xbox 360 ISO, or a folder containing default.xex and resources/.',
-                   'CardMuted.TLabel', wrap=True).pack(anchor='w', pady=(0, 14))
+                   'CardMuted.TLabel', wrap=True).pack(anchor='w', pady=(0, 10))
         self.path = tk.StringVar()
         self.entry = ttk.Entry(source, textvariable=self.path, style='Path.TEntry', font=(FONT, 10))
-        self.entry.pack(fill='x', ipady=3)
+        self.entry.pack(fill='x', ipady=1)
         choices = ttk.Frame(source, style='Card.TFrame')
-        choices.pack(fill='x', pady=(12, 0))
+        choices.pack(fill='x', pady=(10, 0))
         self.iso = ttk.Button(choices, text='Choose ISO…', command=self.pick_iso, style='Secondary.TButton')
         self.iso.pack(side='left')
         self.folder = ttk.Button(choices, text='Choose folder…', command=self.pick_folder, style='Secondary.TButton')
@@ -83,17 +83,20 @@ class Launcher:
         action = self.card(shell, pady=(14, 0))
         self.label(action, '02  /  BUILD & PLAY', 'Eyebrow.TLabel').pack(anchor='w')
         self.phase = tk.StringVar(value='Ready when you are')
-        ttk.Label(action, textvariable=self.phase, style='CardTitle.TLabel').pack(anchor='w', pady=(9, 5))
+        ttk.Label(action, textvariable=self.phase, style='CardTitle.TLabel').pack(anchor='w', pady=(7, 4))
         self.status = tk.StringVar(value='Select your game files to get started. No downloads or extra tools needed.')
         status_label = ttk.Label(action, textvariable=self.status, style='CardMuted.TLabel', wraplength=800)
         status_label.pack(anchor='w')
         self.wrap_labels.append(status_label)
-        self.progress = ttk.Progressbar(action, mode='determinate', style='Build.Horizontal.TProgressbar')
-        self.progress.pack(fill='x', pady=(18, 7))
+        progress_track = tk.Frame(action, background=COLORS['field'], height=6)
+        progress_track.pack(fill='x', pady=(14, 6))
+        progress_track.pack_propagate(False)
+        self.progress = ttk.Progressbar(progress_track, mode='determinate', style='Build.Horizontal.TProgressbar')
+        self.progress.pack(fill='both', expand=True)
         self.progress_note = tk.StringVar(value='Everything is built locally on your computer.')
         ttk.Label(action, textvariable=self.progress_note, style='Small.TLabel').pack(anchor='w')
         buttons = ttk.Frame(action, style='Card.TFrame')
-        buttons.pack(fill='x', pady=(18, 0))
+        buttons.pack(fill='x', pady=(12, 0))
         buttons.columnconfigure(3, weight=1)
         self.build = ttk.Button(buttons, text='Build game', command=self.start_build, style='Primary.TButton')
         self.build.grid(row=0, column=0, sticky='w')
@@ -122,7 +125,7 @@ class Launcher:
         self.log.tag_configure('error', foreground=COLORS['error'])
         self.log.tag_configure('command', foreground=COLORS['green'])
         footer = ttk.Frame(shell)
-        footer.pack(side='bottom', fill='x', pady=(17, 0))
+        footer.pack(side='bottom', fill='x', pady=(14, 0), before=header)
         ttk.Label(footer, text='LINUX  /  VULKAN', style='Footer.TLabel').pack(side='left')
         ttk.Label(footer, text='Your assets. Your machine.', style='Footer.TLabel').pack(side='right')
         self.path.trace_add('write', lambda *_: self.refresh())
@@ -151,7 +154,7 @@ class Launcher:
         style.configure('Card.TFrame', background=c['card'])
         for name, size, color, background, weight in (
             ('Brand', 11, c['text'], c['bg'], 'bold'),
-            ('Hero', 29, c['text'], c['bg'], 'bold'),
+            ('Hero', 26, c['text'], c['bg'], 'bold'),
             ('Muted', 11, c['muted'], c['bg'], 'normal'),
             ('CardTitle', 16, c['text'], c['card'], 'bold'),
             ('CardMuted', 10, c['muted'], c['card'], 'normal'),
@@ -169,7 +172,7 @@ class Launcher:
             key = name + '.TButton'
             style.configure(key, background=background, foreground=foreground,
                             font=(FONT, 10, 'bold' if name in ('Primary', 'Play') else 'normal'),
-                            padding=(18, 12) if name != 'Quiet' else (8, 8),
+                            padding=(16, 9) if name != 'Quiet' else (8, 8),
                             borderwidth=0, relief='flat', anchor='center',
                             focusthickness=2, focuscolor=c['accent'])
             style.map(key, background=[('disabled', '#24303b'), ('active', hover)],
@@ -177,15 +180,16 @@ class Launcher:
                       bordercolor=[('focus', c['accent']), ('!focus', background)],
                       lightcolor=[('!focus', background)], darkcolor=[('!focus', background)])
         style.configure('Path.TEntry', fieldbackground=c['field'], foreground=c['text'],
-                        insertcolor=c['accent'], padding=10, bordercolor=c['border'],
+                        insertcolor=c['accent'], padding=8, bordercolor=c['border'],
                         lightcolor=c['border'], darkcolor=c['border'])
         style.map('Path.TEntry', bordercolor=[('focus', c['accent'])],
                   fieldbackground=[('disabled', c['card'])], foreground=[('disabled', c['muted'])])
         style.configure('Build.Horizontal.TProgressbar', troughcolor=c['field'],
                         background=c['accent'], borderwidth=0, lightcolor=c['accent'],
-                        darkcolor=c['accent'], thickness=5)
+                        darkcolor=c['accent'], bordercolor=c['field'])
         style.configure('Vertical.TScrollbar', troughcolor=c['field'], background=c['border'],
-                        borderwidth=0, arrowcolor=c['muted'])
+                        borderwidth=0, arrowcolor=c['muted'], bordercolor=c['field'],
+                        lightcolor=c['border'], darkcolor=c['border'])
 
     def label(self, parent, text, style, wrap=False):
         label = ttk.Label(parent, text=text, style=style, wraplength=800 if wrap else 0)
@@ -196,7 +200,7 @@ class Launcher:
     def card(self, parent, pady=0):
         border = tk.Frame(parent, background=COLORS['border'], padx=1, pady=1)
         border.pack(fill='x', pady=pady)
-        frame = ttk.Frame(border, style='Card.TFrame', padding=(22, 18))
+        frame = ttk.Frame(border, style='Card.TFrame', padding=(22, 16))
         frame.pack(fill='both', expand=True)
         return frame
 
@@ -231,7 +235,7 @@ class Launcher:
         self.details_visible = visible
         self.details_button.configure(text='Hide build details' if visible else 'Show build details')
         if visible:
-            self.details.pack(fill='both', expand=True, pady=(14, 0), before=self.details.master.winfo_children()[-1])
+            self.details.pack(fill='both', expand=True, pady=(14, 0))
             self.previous_height = self.root.winfo_height()
             self.expanded_height = min(self.previous_height + 200, self.root.winfo_screenheight() - 65)
             self.root.geometry(f'{self.root.winfo_width()}x{max(self.previous_height, self.expanded_height)}')
