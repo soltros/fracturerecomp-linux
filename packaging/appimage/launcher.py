@@ -25,6 +25,60 @@ COLORS = {
 FONT = 'DejaVu Sans'
 
 
+class BuildProgress(tk.Canvas):
+    """A thin progress track that stays legible at every Tk theme and DPI."""
+    def __init__(self, parent):
+        self.mode = 'determinate'
+        self.maximum = 100
+        self.value = 0
+        self.pulse = 0
+        self.timer = None
+        super().__init__(parent, height=6, bg=COLORS['field'], highlightthickness=0, borderwidth=0)
+        self.bind('<Configure>', lambda _: self.draw())
+
+    def configure(self, cnf=None, **kwargs):
+        for key in ('mode', 'maximum', 'value'):
+            if key in kwargs:
+                setattr(self, key, kwargs.pop(key))
+        if cnf is not None or kwargs:
+            super().configure(cnf, **kwargs)
+        self.draw()
+
+    def __getitem__(self, key):
+        if key in ('mode', 'maximum', 'value'):
+            return getattr(self, key)
+        return super().__getitem__(key)
+
+    def draw(self):
+        self.delete('fill')
+        width, height = self.winfo_width(), self.winfo_height()
+        if self.mode == 'indeterminate':
+            length = max(30, width // 5)
+            left = self.pulse % (width + length) - length
+            right = left + length
+        else:
+            left, right = 0, width * min(1, max(0, self.value / max(1, self.maximum)))
+        self.create_rectangle(left, 0, right, height, fill=COLORS['accent'], outline='', tags='fill')
+
+    def start(self):
+        self.stop()
+        self.animate()
+
+    def animate(self):
+        self.pulse += 8
+        self.draw()
+        self.timer = self.after(25, self.animate)
+
+    def stop(self):
+        if self.timer is not None:
+            self.after_cancel(self.timer)
+            self.timer = None
+
+    def destroy(self):
+        self.stop()
+        super().destroy()
+
+
 class Launcher:
     def __init__(self, root, state_dir=Path('/work')):
         self.root = root
@@ -91,7 +145,7 @@ class Launcher:
         progress_track = tk.Frame(action, background=COLORS['field'], height=6)
         progress_track.pack(fill='x', pady=(14, 6))
         progress_track.pack_propagate(False)
-        self.progress = ttk.Progressbar(progress_track, mode='determinate', style='Build.Horizontal.TProgressbar')
+        self.progress = BuildProgress(progress_track)
         self.progress.pack(fill='both', expand=True)
         self.progress_note = tk.StringVar(value='Everything is built locally on your computer.')
         ttk.Label(action, textvariable=self.progress_note, style='Small.TLabel').pack(anchor='w')
@@ -184,9 +238,6 @@ class Launcher:
                         lightcolor=c['border'], darkcolor=c['border'])
         style.map('Path.TEntry', bordercolor=[('focus', c['accent'])],
                   fieldbackground=[('disabled', c['card'])], foreground=[('disabled', c['muted'])])
-        style.configure('Build.Horizontal.TProgressbar', troughcolor=c['field'],
-                        background=c['accent'], borderwidth=0, lightcolor=c['accent'],
-                        darkcolor=c['accent'], bordercolor=c['field'])
         style.configure('Vertical.TScrollbar', troughcolor=c['field'], background=c['border'],
                         borderwidth=0, arrowcolor=c['muted'], bordercolor=c['field'],
                         lightcolor=c['border'], darkcolor=c['border'])

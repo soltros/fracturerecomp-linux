@@ -55,6 +55,8 @@ class LauncherTests(unittest.TestCase):
         app.update_phase('[42/180] Building CXX object fracture.cpp.o\n')
         self.snapshot('launcher-building.png')
         self.assertEqual(app.progress['value'], 42)
+        fill = app.progress.coords('fill')
+        self.assertGreater(fill[2] - fill[0], 0)
         self.assertIn('42', app.progress_note.get())
         self.assertEqual(str(app.entry.cget('state')), 'disabled')
         self.root.geometry('780x710')
