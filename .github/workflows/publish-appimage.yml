@@ -5,11 +5,11 @@ on:
       run_id:
         description: Successful offline builder workflow run
         required: true
-        default: '44952181317'
+        default: '44954587339'
       tag:
         description: New release tag
         required: true
-        default: v0.1.0
+        default: v0.1.1
   push:
     branches: [appimage-builder]
     paths: ['.github/workflows/publish-appimage.yml']
@@ -24,8 +24,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      BUILD_RUN: ${{ inputs.run_id || '44952181317' }}
-      RELEASE_TAG: ${{ inputs.tag || 'v0.1.0' }}
+      BUILD_RUN: ${{ inputs.run_id || '44954587339' }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.1.1' }}
       RELEASE_TARGET: ${{ github.sha }}
     steps:
       - name: Download and verify the tested AppImage
@@ -47,7 +47,9 @@ jobs:
 
           Download FractureBuilder-x86_64.AppImage, mark it executable, and open it. Select your own Xbox 360 ISO or extracted game folder, then choose Build game and Play. The compiler and SDK are included, and game builds work offline. No game assets are distributed.
 
-          Requirements: x86-64-v2 CPU, X11 or XWayland, ptrace permitted, and Intel/AMD Vulkan graphics supported by the bundled Mesa drivers. Proprietary NVIDIA drivers are not integrated. Packaging, all eight tests, and an offline SDK compile/link/run check as an ordinary user passed; gameplay with user-provided assets still needs validation.
+          This update adds a polished dark interface, clearer file selection, live build stages, a thin animated progress indicator, collapsible build details, and improved error feedback. Controls remain visible at compact window sizes.
+
+          Requirements: x86-64-v2 CPU, X11 or XWayland, ptrace permitted, and Intel/AMD Vulkan graphics supported by the bundled Mesa drivers. Proprietary NVIDIA drivers are not integrated. Packaging, all nine tests, and an offline SDK compile/link/run check as an ordinary user passed; gameplay with user-provided assets still needs validation.
           EOF
           gh release create "$RELEASE_TAG" \
             --target "$RELEASE_TARGET" \
