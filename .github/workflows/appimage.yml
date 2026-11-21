@@ -2,7 +2,7 @@ name: Offline builder AppImage
 on:
   workflow_dispatch:
   push:
-    branches: [main, appimage-builder]
+    branches: [main]
     paths: ['packaging/**', 'scripts/build-appimage.sh', 'src/**', 'cmake/**', 'config/**', 'tools/**', '.github/workflows/appimage.yml']
   pull_request:
     paths: ['packaging/**', 'scripts/build-appimage.sh', 'src/**', 'cmake/**', 'config/**', 'tools/**', '.github/workflows/appimage.yml']
