@@ -21,10 +21,11 @@ RUN git clone --branch v0.10.0 --depth 1 --recurse-submodules --shallow-submodul
     && test "$(git -C /opt/rexglue-source rev-parse HEAD)" = f5337cdc947ff6d4c4196737e2c807a48f2a1fc2 \
     && cmake -S /opt/rexglue-source -B /tmp/sdk-build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 \
+      -DCMAKE_C_FLAGS=-march=x86-64-v2 -DCMAKE_CXX_FLAGS=-march=x86-64-v2 \
       -DCMAKE_INSTALL_PREFIX=/opt/fracture-sdk -DREXGLUE_USE_D3D12=OFF \
       -DREXGLUE_USE_VULKAN=ON -DREXGLUE_BUILD_TESTS=OFF \
     && cmake --build /tmp/sdk-build --target install --parallel "${BUILD_JOBS}" \
-    && rm -rf /tmp/sdk-build \
+    && rm -rf /tmp/sdk-build /opt/rexglue-source/out \
     && find /opt/rexglue-source -name .git -prune -exec rm -rf '{}' +
 # Explicit allowlist: never COPY the checkout, local generated code, XEXs, or ISOs.
 COPY CMakeLists.txt CMakePresets.json fracture_v1_manifest.toml fracture_v2_manifest.toml README.md UPSTREAM.md /opt/fracture-source/

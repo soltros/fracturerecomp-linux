@@ -49,7 +49,7 @@ RAM-based parallelism limit; compilation can still take several minutes.
 The AppImage is larger than a conventional game launcher because it includes
 the compiler, Linux userspace, SDK, and SDK source/notices.
 
-Initial target: Linux x86_64 with an X11 or XWayland desktop, PRoot/ptrace
+Initial target: Linux x86_64 (x86-64-v2 CPU) with an X11 or XWayland desktop, PRoot/ptrace
 permitted, and Vulkan-capable Intel or AMD graphics supported by the bundled
 Ubuntu 24.04 Mesa drivers. NVIDIA proprietary drivers are not integrated yet.
 Wayland-only desktops without XWayland cannot display the Tk build wizard.
