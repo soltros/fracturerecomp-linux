@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+APPDIR=${APPDIR:-$(CDPATH= cd -- "${0%/*}" && pwd)}
+export APPDIR
+bb="$APPDIR/bootstrap/busybox"
+if [ "$("$bb" uname -m)" != x86_64 ]; then
+    echo 'Fracture Builder requires Linux x86_64.' >&2
+    exit 1
+fi
+data=${FRACTURE_BUILDER_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/fracture-builder}
+"$bb" mkdir -p "$data"
+data=$(CDPATH= cd -- "$data" && pwd)
+# The virtual paths /opt and /work keep the prebuilt SDK, CMake imports and
+# generated build files valid regardless of where the AppImage is stored.
+# PRoot requires no container daemon or user namespaces. It is not a sandbox.
+set -- "$@"
+if [ "$#" -eq 0 ]; then
+    set -- /usr/bin/python3 /opt/fracture-builder/launcher.py
+else
+    case "$1" in
+        --self-test)
+            set -- /bin/sh -ec 'clang++-20 --version; cmake --version; ninja --version; /opt/fracture-sdk/bin/rexglue --version; python3 -c "import tkinter; import sys; sys.path.insert(0, \"/opt/fracture-builder\"); import builder; assert builder.default_jobs() >= 1; print(\"Offline toolchain ready\")"'
+            ;;
+        --build|--play|--help)
+            set -- /usr/bin/python3 /opt/fracture-builder/builder.py "$@"
+            ;;
+        *) echo 'Usage: FractureBuilder.AppImage [--build ISO_OR_FOLDER | --play | --self-test]' >&2; exit 2 ;;
+    esac
+fi
+# Host graphics libraries are intentionally not placed in LD_LIBRARY_PATH:
+# the included Mesa Vulkan drivers use the matching userspace in the image.
+# Desktop sockets and /dev/dri remain available through these bindings.
+unset LD_LIBRARY_PATH LD_PRELOAD PYTHONHOME PYTHONPATH
+unset VK_ICD_FILENAMES VK_DRIVER_FILES VK_LAYER_PATH
+export PATH=/usr/bin:/bin
+export PROOT_NO_SECCOMP=1
+exec "$APPDIR/bootstrap/ld-linux-x86-64.so.2" \
+    --library-path "$APPDIR/bootstrap/lib" "$APPDIR/bootstrap/proot" \
+    -r "$APPDIR/rootfs" -b /dev -b /proc -b /sys -b /tmp -b /run \
+    -b "$HOME" -b /media -b /mnt -b "$data:/work" \
+    -w /work "$@"

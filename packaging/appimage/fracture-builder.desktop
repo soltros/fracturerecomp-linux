@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Fracture Recomp Builder
+Comment=Build and play Fracture using your own Xbox 360 game files
+Exec=fracture-builder
+Icon=fracture-builder
+Categories=Game;
+Terminal=false

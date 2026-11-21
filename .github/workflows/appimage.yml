@@ -1,0 +1,47 @@
+name: Offline builder AppImage
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, appimage-builder]
+    paths: ['packaging/**', 'scripts/build-appimage.sh', 'src/**', 'cmake/**', 'config/**', 'tools/**', '.github/workflows/appimage.yml']
+  pull_request:
+    paths: ['packaging/**', 'scripts/build-appimage.sh', 'src/**', 'cmake/**', 'config/**', 'tools/**', '.github/workflows/appimage.yml']
+permissions:
+  contents: read
+concurrency:
+  group: appimage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test asset validation and build orchestration
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+          xvfb-run -a python3 -m unittest discover -s tests -v
+      - name: Build offline AppImage
+        run: bash scripts/build-appimage.sh
+        env:
+          BUILD_JOBS: '2'
+      - name: Smoke test without FUSE or network
+        run: |
+          artifact=$(find "$PWD/out/appimage" -maxdepth 1 -name 'FractureBuilder-*-x86_64.AppImage' -print -quit)
+          mkdir -p /tmp/fracture-smoke
+          cd /tmp/fracture-smoke
+          "$artifact" --appimage-extract >/dev/null
+          # The builder must work without a compiler or Python on PATH and
+          # with networking disabled. Game assets never enter this runner.
+          docker run --rm --network none -v /tmp/fracture-smoke:/image ubuntu:24.04 \
+            /image/squashfs-root/AppRun --self-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FractureBuilder-x86_64
+          path: |
+            out/appimage/FractureBuilder-*.AppImage
+            out/appimage/FractureBuilder-*.AppImage.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
