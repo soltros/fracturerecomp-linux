@@ -14,6 +14,9 @@ import sys
 SOURCE = Path('/opt/fracture-source')
 SDK = Path('/opt/fracture-sdk')
 STATE = Path('/work')
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from desktop import install_shortcut
+
 sys.path.insert(0, str(SOURCE / 'tools'))
 
 
@@ -167,17 +170,48 @@ def build(source, jobs):
     # JSON strings are valid TOML basic strings for filesystem paths on Linux.
     (output / 'fracture.toml').write_text('game_data_root = ' + json.dumps(str(game), ensure_ascii=False) + '\n')
     result = {'binary': str(binary), 'game': str(game), 'release': release, 'sha256': digest}
+    add_game_shortcut(result)
+    save_result(result)
+    if result.get('shortcut'):
+        print('Build complete. Launch Fracture from the Games menu, or press Play.', flush=True)
+    else:
+        print('Build complete. You can now press Play.', flush=True)
+
+
+def save_result(result):
     pending = STATE / 'last-build.json.partial'
     pending.write_text(json.dumps(result))
     pending.replace(STATE / 'last-build.json')
-    print('Build complete. You can now press Play.', flush=True)
+
+
+def add_game_shortcut(result):
+    try:
+        revision = (SOURCE / 'BUILD-ID').read_text().strip()
+        shortcut = install_shortcut(STATE, revision)
+        if shortcut:
+            result['shortcut'] = shortcut
+            print('Added Fracture to your Games menu.', flush=True)
+        return bool(shortcut)
+    except (OSError, ValueError) as error:
+        print(f'Warning: the game is built, but its menu shortcut could not be installed: {error}',
+              file=sys.stderr, flush=True)
+        return False
+
+
+def installed_game():
+    result = json.loads((STATE / 'last-build.json').read_text())
+    if not Path(result['binary']).is_file() or not Path(result['game']).is_dir():
+        raise BuildError('Game files have moved. Select their new location and build again.')
+    return result
 
 
 def play():
-    result = json.loads((STATE / 'last-build.json').read_text())
+    result = installed_game()
     binary = Path(result['binary'])
-    if not binary.is_file() or not Path(result['game']).is_dir():
-        raise BuildError('Game files have moved. Select their new location and build again.')
+    # Upgrade an existing build's menu integration without recompiling it.
+    if not result.get('shortcut'):
+        add_game_shortcut(result)
+        save_result(result)
     os.chdir(binary.parent)
     os.execv(str(binary), [str(binary)])
 
@@ -186,6 +220,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', type=Path, metavar='ISO_OR_FOLDER')
     parser.add_argument('--play', action='store_true')
+    parser.add_argument('--install-shortcut', action='store_true', help='add an existing build to the Games menu')
     parser.add_argument('--jobs', type=int, default=default_jobs())
     args = parser.parse_args()
     if not 1 <= args.jobs <= 256:
@@ -202,8 +237,13 @@ def main():
             play()
         elif args.build:
             build(args.build, args.jobs)
+        elif args.install_shortcut:
+            result = installed_game()
+            if not add_game_shortcut(result):
+                raise BuildError('Could not install the Games menu shortcut. See the warning above.')
+            save_result(result)
         else:
-            parser.error('choose --build or --play')
+            parser.error('choose --build, --play, or --install-shortcut')
 
 
 if __name__ == '__main__':

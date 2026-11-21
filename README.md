@@ -45,6 +45,17 @@ needs validation before calling this a tested game release.
    Leave the extracted folder where it is; the app reads it without copying
    the large assets. For an ISO, it extracts the assets into its data folder.
 
+A successful build also adds **Fracture** to the **Games** section of your
+Linux application menu. It launches the game directly. Rebuilding updates the
+same entry. With an older existing build, press Play once in the updated
+builder to add the shortcut without recompiling.
+
+The menu entry is installed per user under `$XDG_DATA_HOME/applications`
+(normally `~/.local/share/applications`). A managed copy of the AppImage is
+kept in the builder's data folder so the shortcut survives moving or deleting
+the original download; allow roughly another 465 MB for this runtime copy.
+If you run an extracted AppDir instead, keep that extracted folder in place.
+
 Building is offline, including the first build. The compiler uses a conservative
 RAM-based parallelism limit; compilation can still take several minutes.
 The AppImage is larger than a conventional game launcher because it includes
@@ -77,6 +88,7 @@ Command-line options are also available:
 ./FractureBuilder-…-x86_64.AppImage --build "/path/to/Fracture.iso" --jobs 2
 ./FractureBuilder-…-x86_64.AppImage --play
 ./FractureBuilder-…-x86_64.AppImage --self-test
+./FractureBuilder-…-x86_64.AppImage --install-shortcut
 ```
 
 For a different storage location, set `FRACTURE_BUILDER_DATA` to an absolute

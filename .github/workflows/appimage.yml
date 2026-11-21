@@ -20,7 +20,7 @@ jobs:
       - name: Test asset validation and build orchestration
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-tk python3-pil xvfb
+          sudo apt-get install -y python3-tk python3-pil xvfb desktop-file-utils libglib2.0-bin
           xvfb-run -a -s '-screen 0 1280x1200x24' python3 -m unittest discover -s tests -v
       - name: Save launcher previews
         if: always()
@@ -59,8 +59,9 @@ jobs:
           # the image, matching the player flow. Game assets never enter CI.
           docker run --rm --network none --user 1000:1000 \
             -e HOME=/tmp/fracture-home -e FRACTURE_BUILDER_DATA=/tmp/fracture-data \
+            -e XDG_DATA_HOME=/tmp/fracture-xdg \
             -v "$artifact:/image/FractureBuilder.AppImage:ro" ubuntu:24.04 \
-            /bin/sh -ec 'mkdir -p "$HOME"; cd /tmp; /image/FractureBuilder.AppImage --appimage-extract >/dev/null; exec /tmp/squashfs-root/AppRun --self-test'
+            /bin/sh -ec 'mkdir -p "$HOME"; cd /tmp; /image/FractureBuilder.AppImage --appimage-extract >/dev/null; /tmp/squashfs-root/AppRun --self-test; /bin/sh /tmp/squashfs-root/rootfs/opt/fracture-builder/smoke/menu-launch.sh /tmp/squashfs-root/AppRun /image/FractureBuilder.AppImage'
       - uses: actions/upload-artifact@v4
         with:
           name: FractureBuilder-x86_64

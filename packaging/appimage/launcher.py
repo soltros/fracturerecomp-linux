@@ -190,7 +190,8 @@ class Launcher:
             pass
         if self.has_build():
             self.phase.set('Your game is ready')
-            self.status.set('Press Play to jump back in, or choose files to build again.')
+            self.status.set('Launch Fracture from Games, or press Play here.' if self.has_shortcut()
+                            else 'Press Play to jump back in, or choose files to build again.')
             self.progress.configure(value=100)
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.bind('<Configure>', self.resize)
@@ -262,6 +263,12 @@ class Launcher:
 
     def has_build(self):
         return (self.state_dir / 'last-build.json').is_file()
+
+    def has_shortcut(self):
+        try:
+            return bool(json.loads((self.state_dir / 'last-build.json').read_text()).get('shortcut'))
+        except (OSError, ValueError):
+            return False
 
     def refresh(self):
         busy = self.process is not None
@@ -362,7 +369,10 @@ class Launcher:
                     self.progress_note.set('Stopped by you')
                 elif item == 0:
                     self.phase.set('Your game is ready' if self.operation == 'build' else 'Welcome back')
-                    self.status.set('Press Play to start Fracture.' if self.operation == 'build' else 'Press Play whenever you want to jump back in.')
+                    if self.has_shortcut():
+                        self.status.set('Launch Fracture from Games, or press Play here.')
+                    else:
+                        self.status.set('Press Play to start Fracture.' if self.operation == 'build' else 'Press Play whenever you want to jump back in.')
                     self.progress_note.set('Build complete' if self.operation == 'build' else 'Game closed')
                     self.progress.configure(mode='determinate', maximum=100, value=100)
                 else:

@@ -119,13 +119,16 @@ class BuilderTests(unittest.TestCase):
         state.mkdir()
         self.commands = []
         with patch.object(builder, 'SOURCE', source), patch.object(builder, 'STATE', state), \
-             patch.object(builder, 'run', side_effect=self.fake_build):
+             patch.object(builder, 'run', side_effect=self.fake_build), \
+             patch.object(builder, 'install_shortcut', return_value='/home/player/.local/share/applications/fracture.desktop') as install:
             builder.build(game, 2)
             # A repeat must reuse the workspace, never bootstrap the SDK.
             builder.build(game, 2)
+            self.assertEqual(install.call_count, 2)
         result = json.loads((state / 'last-build.json').read_text())
         config = Path(result['binary']).parent / 'fracture.toml'
         self.assertEqual(json.loads(config.read_text().split(' = ', 1)[1]), str(game))
+        self.assertEqual(result['shortcut'], '/home/player/.local/share/applications/fracture.desktop')
         self.assertEqual((game / 'default.xex').read_bytes(), self.data)
         self.assertEqual(len(self.commands), 8)
         self.assertTrue(all(command[0] == 'cmake' for command in self.commands))

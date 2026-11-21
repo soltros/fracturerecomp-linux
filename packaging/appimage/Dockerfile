@@ -33,7 +33,7 @@ COPY cmake/ /opt/fracture-source/cmake/
 COPY config/ /opt/fracture-source/config/
 COPY src/ /opt/fracture-source/src/
 COPY tools/setup.py tools/xdvdfs.py /opt/fracture-source/tools/
-COPY packaging/appimage/builder.py packaging/appimage/launcher.py /opt/fracture-builder/
+COPY packaging/appimage/builder.py packaging/appimage/launcher.py packaging/appimage/desktop.py /opt/fracture-builder/
 COPY packaging/appimage/fracture-builder.png /opt/fracture-builder/
 COPY packaging/appimage/smoke/ /opt/fracture-builder/smoke/
 ARG SOURCE_ID
