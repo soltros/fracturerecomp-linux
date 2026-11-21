@@ -12,8 +12,12 @@ mkdir -p "$output"
 # Include local implementation changes in the build ID, not only git HEAD.
 source_id="$(python3 packaging/appimage/source_id.py)"
 image="fracture-builder:$source_id"
-docker build --build-arg "BUILD_JOBS=${BUILD_JOBS:-2}" --build-arg "SOURCE_ID=$source_id" \
-  -f packaging/appimage/Dockerfile -t "$image" .
+if [[ "${FRACTURE_USE_PREBUILT_IMAGE:-0}" == 1 ]]; then
+  docker image inspect "$image" >/dev/null
+else
+  docker build --build-arg "BUILD_JOBS=${BUILD_JOBS:-2}" --build-arg "SOURCE_ID=$source_id" \
+    -f packaging/appimage/Dockerfile -t "$image" .
+fi
 stage="$(mktemp -d "$output/stage.XXXXXXXX")"
 container="$(docker create "$image")"
 cleanup() { docker rm "$container" >/dev/null 2>&1 || true; rm -rf -- "$stage"; }

@@ -23,9 +23,27 @@ jobs:
           sudo apt-get install -y python3-tk xvfb
           xvfb-run -a python3 -m unittest discover -s tests -v
       - name: Build offline AppImage
+        uses: docker/setup-buildx-action@v3
+      - name: Compute redistributable source ID
+        id: source
+        run: echo "id=$(python3 packaging/appimage/source_id.py)" >> "$GITHUB_OUTPUT"
+      - name: Build and cache the offline toolchain
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/appimage/Dockerfile
+          load: true
+          tags: fracture-builder:${{ steps.source.outputs.id }}
+          build-args: |
+            BUILD_JOBS=2
+            SOURCE_ID=${{ steps.source.outputs.id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Package offline AppImage
         run: bash scripts/build-appimage.sh
         env:
           BUILD_JOBS: '2'
+          FRACTURE_USE_PREBUILT_IMAGE: '1'
       - name: Smoke test without FUSE or network
         run: |
           artifact=$(find "$PWD/out/appimage" -maxdepth 1 -name 'FractureBuilder-*-x86_64.AppImage' -print -quit)

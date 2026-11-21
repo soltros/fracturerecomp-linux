@@ -118,16 +118,34 @@ def build(source, jobs):
         if len(set(destinations)) != len(destinations):
             raise BuildError('Disc image contains duplicate file names.')
         total = sum(e.size for e in files)
-        if shutil.disk_usage(workspace).free < total + (2 << 30):
+        # A successful extraction is reusable; partial extractions are always
+        # overwritten on retry. Bind the marker to the ISO's identity as well
+        # as the XEX so switching discs cannot silently reuse other assets.
+        marker = game / '.fracture-builder-extracted.json'
+        identity = {'path': str(source), 'size': source.stat().st_size,
+                    'mtime_ns': source.stat().st_mtime_ns, 'sha256': digest}
+        extracted = False
+        try:
+            extracted = (json.loads(marker.read_text()) == identity
+                         and all(dest.is_file() and dest.stat().st_size == entry.size
+                                 for entry, dest in zip(files, destinations)))
+        except (OSError, ValueError):
+            pass
+        if extracted:
+            print('Using the previously extracted game files.', flush=True)
+        elif shutil.disk_usage(workspace).free < total + (2 << 30):
             raise BuildError('Not enough free space to extract this disc and build the game.')
         # Always overwrite partial files. A cancelled extraction must not appear complete.
-        with source.open('rb') as disc:
-            for index, (entry, dest) in enumerate(zip(files, destinations), 1):
-                print(f'Extracting {index}/{len(files)}: {entry.path}', flush=True)
-                xdvdfs.extract(disc, entry, str(dest))
+        if not extracted:
+            marker.unlink(missing_ok=True)
+            with source.open('rb') as disc:
+                for index, (entry, dest) in enumerate(zip(files, destinations), 1):
+                    print(f'Extracting {index}/{len(files)}: {entry.path}', flush=True)
+                    xdvdfs.extract(disc, entry, str(dest))
         if not (game / 'resources').is_dir():
             raise BuildError('The extracted disc has no resources/ directory.')
         (game / 'default.xex').write_bytes(data)
+        marker.write_text(json.dumps(identity))
     else:
         game = source
     xex_dir = tree / 'xex' / release

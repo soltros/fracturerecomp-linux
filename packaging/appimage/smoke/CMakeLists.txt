@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.25)
+project(fracture_offline_sdk_smoke LANGUAGES CXX)
+find_package(rexglue 0.10.0 REQUIRED CONFIG)
+add_executable(sdk-smoke main.cpp)
+target_compile_features(sdk-smoke PRIVATE cxx_std_23)
+target_link_libraries(sdk-smoke PRIVATE rex::runtime)
