@@ -20,8 +20,15 @@ jobs:
       - name: Test asset validation and build orchestration
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-tk xvfb
-          xvfb-run -a python3 -m unittest discover -s tests -v
+          sudo apt-get install -y python3-tk python3-pil xvfb
+          xvfb-run -a -s '-screen 0 1280x1200x24' python3 -m unittest discover -s tests -v
+      - name: Save launcher previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Launcher-previews
+          path: out/previews/*.png
+          if-no-files-found: ignore
       - name: Build offline AppImage
         uses: docker/setup-buildx-action@v3
       - name: Compute redistributable source ID

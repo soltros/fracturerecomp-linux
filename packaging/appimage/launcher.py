@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Small desktop wizard; all long-running work happens in a separate process."""
+import json
 import os
+import re
 from pathlib import Path
 import queue
 import signal
@@ -8,62 +10,239 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import filedialog, messagebox, ttk
 
 HERE = Path(__file__).resolve().parent
 
 
+# Keep the visual system local so the same interface ships on every desktop.
+COLORS = {
+    'bg': '#10171e', 'card': '#19232d', 'border': '#2a3845',
+    'field': '#111b24', 'text': '#edf2f5', 'muted': '#a1afbc',
+    'accent': '#f2ad62', 'hover': '#ffc584', 'ink': '#17212b',
+    'green': '#8bd5bd', 'error': '#f1a2a9',
+}
+FONT = 'DejaVu Sans'
+
+
 class Launcher:
-    def __init__(self, root):
+    def __init__(self, root, state_dir=Path('/work')):
         self.root = root
+        self.state_dir = Path(state_dir)
         self.process = None
+        self.operation = None
+        self.cancelled = False
+        self.last_error = ''
+        self.details_visible = False
         self.events = queue.Queue()
+        self.wrap_labels = []
         root.title('Fracture Recomp — Build & Play')
-        root.geometry('820x580')
-        root.minsize(640, 460)
-        frame = ttk.Frame(root, padding=22)
-        frame.pack(fill='both', expand=True)
-        ttk.Label(frame, text='Fracture Recomp', font=('', 24, 'bold')).pack(anchor='w')
-        ttk.Label(frame, text='Build once with your own game files, then play on Linux.',
-                  wraplength=740).pack(anchor='w', pady=(4, 16))
-        ttk.Label(frame, text='1. Choose your Xbox 360 ISO or extracted folder (default.xex + resources/).',
-                  wraplength=740).pack(anchor='w')
-        row = ttk.Frame(frame)
-        row.pack(fill='x', pady=8)
+        root.geometry('940x740')
+        root.minsize(780, 710)
+        root.configure(background=COLORS['bg'])
+        try:
+            self.icon = tk.PhotoImage(file=str(HERE / 'fracture-builder.png'))
+            root.iconphoto(True, self.icon)
+        except tk.TclError:
+            pass
+        self.configure_styles()
+        shell = ttk.Frame(root, padding=(32, 24, 32, 20))
+        shell.pack(fill='both', expand=True)
+
+        header = ttk.Frame(shell)
+        header.pack(fill='x')
+        mark = tk.Canvas(header, width=38, height=38, bg=COLORS['bg'], highlightthickness=0)
+        mark.pack(side='left', padx=(0, 12))
+        mark.create_polygon(5, 3, 34, 3, 29, 12, 15, 12, 15, 19, 27, 19,
+                            23, 27, 15, 27, 15, 36, 5, 36, fill=COLORS['accent'], outline='')
+        ttk.Label(header, text='FRACTURE  /  RECOMP', style='Brand.TLabel').pack(side='left')
+        tk.Label(header, text='  ●  OFFLINE BUILDER  ', font=(FONT, 9, 'bold'),
+                 fg=COLORS['green'], bg='#1b302e', padx=10, pady=7).pack(side='right')
+        ttk.Separator(shell).pack(fill='x', pady=(20, 23))
+        ttk.Label(shell, text='Build once. Play anytime.', style='Hero.TLabel').pack(anchor='w')
+        self.label(shell, 'Bring your copy of Fracture. The tools are already here.',
+                   'Muted.TLabel').pack(anchor='w', pady=(7, 22))
+
+        source = self.card(shell)
+        self.label(source, '01  /  GAME FILES', 'Eyebrow.TLabel').pack(anchor='w')
+        self.label(source, 'Start with your copy', 'CardTitle.TLabel').pack(anchor='w', pady=(9, 5))
+        self.label(source, 'Choose an Xbox 360 ISO, or a folder containing default.xex and resources/.',
+                   'CardMuted.TLabel', wrap=True).pack(anchor='w', pady=(0, 14))
         self.path = tk.StringVar()
-        ttk.Entry(row, textvariable=self.path).pack(side='left', fill='x', expand=True)
-        self.iso = ttk.Button(row, text='Choose ISO…', command=self.pick_iso)
-        self.iso.pack(side='left', padx=5)
-        self.folder = ttk.Button(row, text='Choose folder…', command=self.pick_folder)
-        self.folder.pack(side='left')
-        ttk.Label(frame, text='2. Build the game. The compiler and SDK are included; no downloads are needed.',
-                  wraplength=740).pack(anchor='w', pady=(8, 4))
-        buttons = ttk.Frame(frame)
-        buttons.pack(fill='x', pady=6)
-        self.build = ttk.Button(buttons, text='Build game', command=self.start_build)
-        self.build.pack(side='left')
-        self.play = ttk.Button(buttons, text='Play', command=self.start_play)
-        self.play.pack(side='left', padx=8)
-        self.cancel = ttk.Button(buttons, text='Cancel', command=self.stop, state='disabled')
-        self.cancel.pack(side='right')
-        self.status = tk.StringVar(value='Ready. Your original game files will only be read.')
-        ttk.Label(frame, textvariable=self.status, wraplength=740).pack(anchor='w', pady=6)
-        self.progress = ttk.Progressbar(frame, mode='indeterminate')
-        self.progress.pack(fill='x', pady=(0, 8))
-        self.log = scrolledtext.ScrolledText(frame, height=14, state='disabled', wrap='word')
-        self.log.pack(fill='both', expand=True)
-        ttk.Label(frame, text='Build logs and game settings are saved in your Fracture Builder data folder.',
-                  wraplength=740).pack(anchor='w', pady=(10, 0))
+        self.entry = ttk.Entry(source, textvariable=self.path, style='Path.TEntry', font=(FONT, 10))
+        self.entry.pack(fill='x', ipady=3)
+        choices = ttk.Frame(source, style='Card.TFrame')
+        choices.pack(fill='x', pady=(12, 0))
+        self.iso = ttk.Button(choices, text='Choose ISO…', command=self.pick_iso, style='Secondary.TButton')
+        self.iso.pack(side='left')
+        self.folder = ttk.Button(choices, text='Choose folder…', command=self.pick_folder, style='Secondary.TButton')
+        self.folder.pack(side='left', padx=(9, 0))
+        self.source_note = tk.StringVar(value='Your original files stay untouched.')
+        ttk.Label(choices, textvariable=self.source_note, style='CardMuted.TLabel').pack(side='right')
+
+        action = self.card(shell, pady=(14, 0))
+        self.label(action, '02  /  BUILD & PLAY', 'Eyebrow.TLabel').pack(anchor='w')
+        self.phase = tk.StringVar(value='Ready when you are')
+        ttk.Label(action, textvariable=self.phase, style='CardTitle.TLabel').pack(anchor='w', pady=(9, 5))
+        self.status = tk.StringVar(value='Select your game files to get started. No downloads or extra tools needed.')
+        status_label = ttk.Label(action, textvariable=self.status, style='CardMuted.TLabel', wraplength=800)
+        status_label.pack(anchor='w')
+        self.wrap_labels.append(status_label)
+        self.progress = ttk.Progressbar(action, mode='determinate', style='Build.Horizontal.TProgressbar')
+        self.progress.pack(fill='x', pady=(18, 7))
+        self.progress_note = tk.StringVar(value='Everything is built locally on your computer.')
+        ttk.Label(action, textvariable=self.progress_note, style='Small.TLabel').pack(anchor='w')
+        buttons = ttk.Frame(action, style='Card.TFrame')
+        buttons.pack(fill='x', pady=(18, 0))
+        buttons.columnconfigure(3, weight=1)
+        self.build = ttk.Button(buttons, text='Build game', command=self.start_build, style='Primary.TButton')
+        self.build.grid(row=0, column=0, sticky='w')
+        self.play = ttk.Button(buttons, text='▶  Play', command=self.start_play, style='Play.TButton')
+        self.play.grid(row=0, column=1, padx=(10, 0))
+        self.cancel = ttk.Button(buttons, text='Cancel', command=self.stop, style='Secondary.TButton')
+        self.cancel.grid(row=0, column=2, padx=(10, 0))
+        self.details_button = ttk.Button(buttons, text='Show build details', command=self.toggle_details, style='Quiet.TButton')
+        self.details_button.grid(row=0, column=4, sticky='e')
+
+        self.details = ttk.Frame(shell, style='Card.TFrame', padding=14)
+        detail_header = ttk.Frame(self.details, style='Card.TFrame')
+        detail_header.pack(fill='x', pady=(0, 9))
+        ttk.Label(detail_header, text='BUILD DETAILS', style='Eyebrow.TLabel').pack(side='left')
+        ttk.Button(detail_header, text='Copy log', command=self.copy_log, style='Quiet.TButton').pack(side='right')
+        log_frame = ttk.Frame(self.details, style='Card.TFrame')
+        log_frame.pack(fill='both', expand=True)
+        self.log = tk.Text(log_frame, height=9, state='disabled', wrap='word',
+                           bg=COLORS['field'], fg=COLORS['muted'], insertbackground=COLORS['text'],
+                           selectbackground='#364958', relief='flat', borderwidth=0,
+                           padx=12, pady=10, font=('DejaVu Sans Mono', 9), highlightthickness=0)
+        self.log.pack(side='left', fill='both', expand=True)
+        scrollbar = ttk.Scrollbar(log_frame, command=self.log.yview)
+        scrollbar.pack(side='right', fill='y')
+        self.log.configure(yscrollcommand=scrollbar.set)
+        self.log.tag_configure('error', foreground=COLORS['error'])
+        self.log.tag_configure('command', foreground=COLORS['green'])
+        footer = ttk.Frame(shell)
+        footer.pack(side='bottom', fill='x', pady=(17, 0))
+        ttk.Label(footer, text='LINUX  /  VULKAN', style='Footer.TLabel').pack(side='left')
+        ttk.Label(footer, text='Your assets. Your machine.', style='Footer.TLabel').pack(side='right')
+        self.path.trace_add('write', lambda *_: self.refresh())
+        try:
+            previous = json.loads((self.state_dir / 'last-build.json').read_text())
+            self.path.set(previous['game'])
+        except (OSError, ValueError, KeyError):
+            pass
+        if self.has_build():
+            self.phase.set('Your game is ready')
+            self.status.set('Press Play to jump back in, or choose files to build again.')
+            self.progress.configure(value=100)
         root.protocol('WM_DELETE_WINDOW', self.close)
+        root.bind('<Configure>', self.resize)
         root.after(100, self.poll)
         self.refresh()
 
+    def configure_styles(self):
+        c = COLORS
+        style = ttk.Style(self.root)
+        style.theme_use('clam')
+        style.configure('.', font=(FONT, 10), background=c['bg'], foreground=c['text'])
+        style.configure('TFrame', background=c['bg'])
+        style.configure('TLabel', background=c['bg'], foreground=c['text'])
+        style.configure('TSeparator', background=c['border'])
+        style.configure('Card.TFrame', background=c['card'])
+        for name, size, color, background, weight in (
+            ('Brand', 11, c['text'], c['bg'], 'bold'),
+            ('Hero', 29, c['text'], c['bg'], 'bold'),
+            ('Muted', 11, c['muted'], c['bg'], 'normal'),
+            ('CardTitle', 16, c['text'], c['card'], 'bold'),
+            ('CardMuted', 10, c['muted'], c['card'], 'normal'),
+            ('Eyebrow', 9, c['accent'], c['card'], 'bold'),
+            ('Small', 9, c['muted'], c['card'], 'normal'),
+            ('Footer', 9, c['muted'], c['bg'], 'normal'),
+        ):
+            style.configure(name + '.TLabel', font=(FONT, size, weight), foreground=color, background=background)
+        for name, background, foreground, hover in (
+            ('Primary', c['accent'], c['ink'], c['hover']),
+            ('Secondary', '#2a3946', c['text'], '#354958'),
+            ('Play', '#285246', '#d0f3e5', '#356b59'),
+            ('Quiet', c['card'], c['muted'], '#243440'),
+        ):
+            key = name + '.TButton'
+            style.configure(key, background=background, foreground=foreground,
+                            font=(FONT, 10, 'bold' if name in ('Primary', 'Play') else 'normal'),
+                            padding=(18, 12) if name != 'Quiet' else (8, 8),
+                            borderwidth=0, relief='flat', anchor='center',
+                            focusthickness=2, focuscolor=c['accent'])
+            style.map(key, background=[('disabled', '#24303b'), ('active', hover)],
+                      foreground=[('disabled', '#6f818f')],
+                      bordercolor=[('focus', c['accent']), ('!focus', background)],
+                      lightcolor=[('!focus', background)], darkcolor=[('!focus', background)])
+        style.configure('Path.TEntry', fieldbackground=c['field'], foreground=c['text'],
+                        insertcolor=c['accent'], padding=10, bordercolor=c['border'],
+                        lightcolor=c['border'], darkcolor=c['border'])
+        style.map('Path.TEntry', bordercolor=[('focus', c['accent'])],
+                  fieldbackground=[('disabled', c['card'])], foreground=[('disabled', c['muted'])])
+        style.configure('Build.Horizontal.TProgressbar', troughcolor=c['field'],
+                        background=c['accent'], borderwidth=0, lightcolor=c['accent'],
+                        darkcolor=c['accent'], thickness=5)
+        style.configure('Vertical.TScrollbar', troughcolor=c['field'], background=c['border'],
+                        borderwidth=0, arrowcolor=c['muted'])
+
+    def label(self, parent, text, style, wrap=False):
+        label = ttk.Label(parent, text=text, style=style, wraplength=800 if wrap else 0)
+        if wrap:
+            self.wrap_labels.append(label)
+        return label
+
+    def card(self, parent, pady=0):
+        border = tk.Frame(parent, background=COLORS['border'], padx=1, pady=1)
+        border.pack(fill='x', pady=pady)
+        frame = ttk.Frame(border, style='Card.TFrame', padding=(22, 18))
+        frame.pack(fill='both', expand=True)
+        return frame
+
+    def resize(self, event):
+        if event.widget is self.root:
+            for label in self.wrap_labels:
+                label.configure(wraplength=max(400, event.width - 112))
+
+    def has_build(self):
+        return (self.state_dir / 'last-build.json').is_file()
+
     def refresh(self):
         busy = self.process is not None
-        for widget in (self.build, self.iso, self.folder):
+        self.build.configure(state='normal' if not busy and self.path.get().strip() else 'disabled',
+                             text='Building…' if busy and self.operation == 'build' else 'Build game')
+        for widget in (self.iso, self.folder, self.entry):
             widget.configure(state='disabled' if busy else 'normal')
-        self.play.configure(state='normal' if not busy and Path('/work/last-build.json').is_file() else 'disabled')
-        self.cancel.configure(state='normal' if busy else 'disabled')
+        self.play.configure(state='normal' if not busy and self.has_build() else 'disabled',
+                            text='Playing…' if busy and self.operation == 'play' else '▶  Play')
+        if busy:
+            self.cancel.grid()
+        else:
+            self.cancel.grid_remove()
+        self.source_note.set('Files selected' if self.path.get().strip() else 'Your original files stay untouched.')
+
+    def toggle_details(self):
+        self.show_details(not self.details_visible)
+
+    def show_details(self, visible):
+        if visible == self.details_visible:
+            return
+        self.details_visible = visible
+        self.details_button.configure(text='Hide build details' if visible else 'Show build details')
+        if visible:
+            self.details.pack(fill='both', expand=True, pady=(14, 0), before=self.details.master.winfo_children()[-1])
+            self.previous_height = self.root.winfo_height()
+            self.expanded_height = min(self.previous_height + 200, self.root.winfo_screenheight() - 65)
+            self.root.geometry(f'{self.root.winfo_width()}x{max(self.previous_height, self.expanded_height)}')
+        else:
+            self.details.pack_forget()
+            if self.root.winfo_height() == self.expanded_height:
+                self.root.geometry(f'{self.root.winfo_width()}x{self.previous_height}')
+
+    def copy_log(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.log.get('1.0', 'end-1c'))
 
     def pick_iso(self):
         path = filedialog.askopenfilename(title='Choose your Fracture disc image',
@@ -80,7 +259,7 @@ class Launcher:
         if not self.path.get().strip():
             messagebox.showinfo('Choose your game files', 'Select an ISO or extracted game folder first.')
             return
-        self.start(['--build', self.path.get()], 'Building your game… This can take several minutes.')
+        self.start(['--build', self.path.get()], 'This can take several minutes. You can follow the build below.')
 
     def start_play(self):
         self.start(['--play'], 'Game running. Close the game to return here.')
@@ -93,13 +272,19 @@ class Launcher:
         except OSError as error:
             messagebox.showerror('Could not start', str(error))
             return
+        self.operation = 'play' if args == ['--play'] else 'build'
+        self.cancelled = False
+        self.last_error = ''
+        self.phase.set('Enjoy the game' if self.operation == 'play' else 'Checking your game files')
         self.status.set(status)
+        self.progress.configure(mode='indeterminate', value=0)
+        self.progress_note.set('Game running' if self.operation == 'play' else 'Preparing your local build…')
         self.progress.start()
         self.refresh()
         threading.Thread(target=self.read_output, args=(self.process,), daemon=True).start()
 
     def read_output(self, process):
-        with Path('/work/builder.log').open('a') as log:
+        with (self.state_dir / 'builder.log').open('a') as log:
             for line in process.stdout:
                 log.write(line)
                 log.flush()
@@ -116,11 +301,26 @@ class Launcher:
             if isinstance(item, int):
                 self.process = None
                 self.progress.stop()
-                self.status.set('Ready to play.' if item == 0 else 'Stopped. See the log below for details; you can try again.')
+                if self.cancelled:
+                    self.phase.set('Build cancelled' if self.operation == 'build' else 'Game stopped')
+                    self.status.set('Your files are safe. Start again whenever you’re ready.')
+                    self.progress_note.set('Stopped by you')
+                elif item == 0:
+                    self.phase.set('Your game is ready' if self.operation == 'build' else 'Welcome back')
+                    self.status.set('Press Play to start Fracture.' if self.operation == 'build' else 'Press Play whenever you want to jump back in.')
+                    self.progress_note.set('Build complete' if self.operation == 'build' else 'Game closed')
+                    self.progress.configure(mode='determinate', maximum=100, value=100)
+                else:
+                    self.phase.set('Build needs attention')
+                    self.status.set(self.last_error or 'The task stopped. Check the details below, then try again.')
+                    self.progress_note.set('Build stopped' if self.operation == 'build' else 'Game stopped')
+                    self.show_details(True)
                 self.refresh()
             else:
                 self.log.configure(state='normal')
-                self.log.insert('end', item)
+                self.update_phase(item)
+                tag = 'error' if 'error' in item.lower() else 'command' if item.startswith('+ ') else ''
+                self.log.insert('end', item, tag)
                 # Keep the GUI responsive even for a full compiler build.
                 if int(self.log.index('end-1c').split('.')[0]) > 2500:
                     self.log.delete('1.0', '500.0')
@@ -128,8 +328,36 @@ class Launcher:
                 self.log.configure(state='disabled')
         self.root.after(100, self.poll)
 
+    def update_phase(self, line):
+        if line.startswith('Error:'):
+            self.last_error = line.removeprefix('Error:').strip()
+        extraction = re.match(r'Extracting (\d+)/(\d+):', line)
+        compilation = re.match(r'\[(\d+)/(\d+)\]', line)
+        if extraction or compilation:
+            current, total = map(int, (extraction or compilation).groups())
+            self.progress.stop()
+            self.progress.configure(mode='determinate', maximum=max(1, total), value=current)
+            if extraction:
+                self.phase.set('Extracting your game files')
+                self.progress_note.set(f'{current:,} of {total:,} files')
+            else:
+                self.progress_note.set(f'{current:,} of {total:,} build tasks')
+        if line.startswith('+ cmake'):
+            self.progress.stop()
+            self.progress.configure(mode='indeterminate', value=0)
+            self.progress.start()
+            if 'fracture_codegen' in line:
+                self.phase.set('Recompiling the game code')
+            elif '--build' in line:
+                self.phase.set('Building your Linux game')
+            else:
+                self.phase.set('Preparing the build')
+            self.progress_note.set('Working locally — no downloads needed')
+
     def stop(self):
         if self.process:
+            self.cancelled = True
+            self.status.set('Stopping safely…')
             pid = self.process.pid
             try:
                 os.killpg(pid, signal.SIGTERM)
