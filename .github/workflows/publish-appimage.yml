@@ -5,11 +5,11 @@ on:
       run_id:
         description: Successful offline builder workflow run
         required: true
-        default: '44954587339'
+        default: '44956928444'
       tag:
         description: New release tag
         required: true
-        default: v0.1.1
+        default: v0.1.2
   push:
     branches: [appimage-builder]
     paths: ['.github/workflows/publish-appimage.yml']
@@ -24,8 +24,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      BUILD_RUN: ${{ inputs.run_id || '44954587339' }}
-      RELEASE_TAG: ${{ inputs.tag || 'v0.1.1' }}
+      BUILD_RUN: ${{ inputs.run_id || '44956928444' }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.1.2' }}
       RELEASE_TARGET: ${{ github.sha }}
     steps:
       - name: Download and verify the tested AppImage
@@ -47,9 +47,9 @@ jobs:
 
           Download FractureBuilder-x86_64.AppImage, mark it executable, and open it. Select your own Xbox 360 ISO or extracted game folder, then choose Build game and Play. The compiler and SDK are included, and game builds work offline. No game assets are distributed.
 
-          This update adds a polished dark interface, clearer file selection, live build stages, a thin animated progress indicator, collapsible build details, and improved error feedback. Controls remain visible at compact window sizes.
+          Successful builds now add Fracture to the Games section of the Linux application menu. The shortcut starts the game directly. For an existing build, press Play once in this updated builder to add the entry without recompiling. Rebuilding updates the same menu entry. A managed runtime copy in the data folder keeps normal AppImage installs working after the original download is moved or deleted.
 
-          Requirements: x86-64-v2 CPU, X11 or XWayland, ptrace permitted, and Intel/AMD Vulkan graphics supported by the bundled Mesa drivers. Proprietary NVIDIA drivers are not integrated. Packaging, all nine tests, and an offline SDK compile/link/run check as an ordinary user passed; gameplay with user-provided assets still needs validation.
+          Requirements: x86-64-v2 CPU, X11 or XWayland, ptrace permitted, and Intel/AMD Vulkan graphics supported by the bundled Mesa drivers. Proprietary NVIDIA drivers are not integrated. Packaging, all 14 tests, and an offline SDK compile/link/run check and a packaged menu-to-game launch as an ordinary user passed; gameplay with user-provided assets still needs validation.
           EOF
           gh release create "$RELEASE_TAG" \
             --target "$RELEASE_TARGET" \
