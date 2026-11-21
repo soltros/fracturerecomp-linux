@@ -27,8 +27,8 @@ mkdir -p "$appdir/rootfs" "$appdir/bootstrap/lib"
 docker export "$container" | tar --extract --no-same-owner -C "$appdir/rootfs"
 rm -f "$appdir/rootfs/.dockerenv"
 cp packaging/appimage/AppRun packaging/appimage/fracture-builder.desktop \
-  packaging/appimage/fracture-builder.svg "$appdir/"
-ln -s fracture-builder.svg "$appdir/.DirIcon"
+  packaging/appimage/fracture-builder.png "$appdir/"
+ln -s fracture-builder.png "$appdir/.DirIcon"
 # Docker's system directories and SDK sources can retain root-only modes.
 # The mounted AppImage must be readable by an ordinary desktop account.
 chmod -R a+rX "$appdir/rootfs"
