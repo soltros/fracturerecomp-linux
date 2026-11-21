@@ -28,7 +28,10 @@ docker export "$container" | tar --extract --no-same-owner -C "$appdir/rootfs"
 rm -f "$appdir/rootfs/.dockerenv"
 cp packaging/appimage/AppRun packaging/appimage/fracture-builder.desktop \
   packaging/appimage/fracture-builder.svg "$appdir/"
-cp packaging/appimage/fracture-builder.svg "$appdir/.DirIcon"
+ln -s fracture-builder.svg "$appdir/.DirIcon"
+# Docker's system directories and SDK sources can retain root-only modes.
+# The mounted AppImage must be readable by an ordinary desktop account.
+chmod -R a+rX "$appdir/rootfs"
 cp "$appdir/rootfs/usr/bin/busybox" "$appdir/bootstrap/busybox"
 cp "$appdir/rootfs/usr/bin/proot" "$appdir/bootstrap/proot"
 # Resolve the bootstrap dependencies inside the matching build container.
@@ -39,7 +42,7 @@ FRACTURE_BUILDER_DATA="$stage/smoke-state" "$appdir/AppRun" --self-test
 # Pin the packaging tool by digest, even though its download tag is mutable.
 tool="$output/appimagetool-x86_64.AppImage"
 tool_sha=e8c1169c4af66c3184d7ee110713d4be04befe671fa358e2c1591ee840553b03
-if ! echo "$tool_sha  $tool" | sha256sum --check --status; then
+if [[ ! -f "$tool" ]] || ! echo "$tool_sha  $tool" | sha256sum --check --status; then
   curl -fL --retry 3 -o "$tool.partial" \
     https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
   echo "$tool_sha  $tool.partial" | sha256sum --check

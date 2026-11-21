@@ -52,8 +52,10 @@ jobs:
           "$artifact" --appimage-extract >/dev/null
           # The builder must work without a compiler or Python on PATH and
           # with networking disabled. Game assets never enter this runner.
-          docker run --rm --network none -v /tmp/fracture-smoke:/image ubuntu:24.04 \
-            /image/squashfs-root/AppRun --self-test
+          docker run --rm --network none --user 1000:1000 \
+            -e HOME=/tmp/fracture-home -e FRACTURE_BUILDER_DATA=/tmp/fracture-data \
+            -v /tmp/fracture-smoke:/image ubuntu:24.04 \
+            /bin/sh -ec 'mkdir -p "$HOME"; exec /image/squashfs-root/AppRun --self-test'
       - uses: actions/upload-artifact@v4
         with:
           name: FractureBuilder-x86_64

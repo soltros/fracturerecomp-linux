@@ -29,8 +29,9 @@ prebuilt Vulkan-only ReXGlue SDK. You supply the game files; the app validates
 them and builds the matching native Linux game module. It does not download
 game data or require development packages on your computer.
 
-The packaging workflow is implemented; an AppImage and actual gameplay still
-need to be validated on a build machine before calling this a tested release.
+The packaging workflow has produced an AppImage and passed an offline
+compiler/SDK smoke test. Actual gameplay with user-provided assets still
+needs validation before calling this a tested game release.
 
 1. Download `FractureBuilder-…-x86_64.AppImage` from the **Offline builder
    AppImage** workflow's artifact in [Actions](https://github.com/soltros/fracturerecomp-linux/actions).
