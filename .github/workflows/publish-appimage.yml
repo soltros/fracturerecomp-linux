@@ -1,0 +1,63 @@
+name: Publish standalone AppImage
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful offline builder workflow run
+        required: true
+        default: '44952181317'
+      tag:
+        description: New release tag
+        required: true
+        default: v0.1.0
+  push:
+    branches: [appimage-builder]
+    paths: ['.github/workflows/publish-appimage.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish-appimage]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN: ${{ inputs.run_id || '44952181317' }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.1.0' }}
+      RELEASE_TARGET: ${{ github.sha }}
+    steps:
+      - name: Download and verify the tested AppImage
+        run: |
+          set -euo pipefail
+          test "$(gh run view "$BUILD_RUN" --json conclusion --jq .conclusion)" = success
+          gh run download "$BUILD_RUN" --name FractureBuilder-x86_64 --dir artifact
+          cd artifact
+          sha256sum --check ./*.AppImage.sha256
+          mapfile -t images < <(find . -maxdepth 1 -type f -name '*.AppImage')
+          test "${#images[@]}" = 1
+          mv -- "${images[0]}" FractureBuilder-x86_64.AppImage
+          chmod +x FractureBuilder-x86_64.AppImage
+      - name: Publish only the standalone AppImage
+        run: |
+          set -euo pipefail
+          cat > /tmp/release-notes.txt <<'EOF'
+          Self-contained Fracture Recomp builder for Linux x86_64.
+
+          Download FractureBuilder-x86_64.AppImage, mark it executable, and open it. Select your own Xbox 360 ISO or extracted game folder, then choose Build game and Play. The compiler and SDK are included, and game builds work offline. No game assets are distributed.
+
+          Requirements: x86-64-v2 CPU, X11 or XWayland, ptrace permitted, and Intel/AMD Vulkan graphics supported by the bundled Mesa drivers. Proprietary NVIDIA drivers are not integrated. Packaging, all eight tests, and an offline SDK compile/link/run check as an ordinary user passed; gameplay with user-provided assets still needs validation.
+          EOF
+          gh release create "$RELEASE_TAG" \
+            --target "$RELEASE_TARGET" \
+            --title "Fracture Recomp Linux Builder $RELEASE_TAG" \
+            --notes-file /tmp/release-notes.txt --latest \
+            artifact/FractureBuilder-x86_64.AppImage
+      - name: Verify the public release has exactly one uploaded asset
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --json url,isDraft,isPrerelease,assets \
+            --jq '{url, isDraft, isPrerelease, assets: [.assets[].name]}'
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" = 1
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[0].name')" = FractureBuilder-x86_64.AppImage
