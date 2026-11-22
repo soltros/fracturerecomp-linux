@@ -46,11 +46,11 @@ class NativeLaunchTests(unittest.TestCase):
             (state / 'last-build.json').write_text(metadata)
             with patch.dict(os.environ, RECOMPLAUNCHER_DATA=str(state)), \
                  patch.object(native, 'relocate_binary') as relocate, \
-                 patch.object(native.os, 'chdir'), patch.object(native.os, 'execve') as execute:
+                 patch.object(native.os, 'chdir'), patch.object(native, 'run_game') as execute:
                 native.play(Path('/app'), state)
             relocate.assert_called_once()
             self.assertEqual(execute.call_args.args[0], state / 'cache/fracture')
-            self.assertEqual(execute.call_args.args[1][1], '--game_data_root=' + str(state / 'game'))
+            self.assertEqual(execute.call_args.args[1], state / 'game')
             self.assertEqual((state / 'last-build.json').read_text(), metadata)
 
     def test_portable_play_requires_successful_preparation(self):
@@ -58,3 +58,19 @@ class NativeLaunchTests(unittest.TestCase):
              patch.dict(os.environ, RECOMPLAUNCHER_DATA=temporary):
             with self.assertRaises(native.SetupMissing):
                 native.play(Path('/app'), Path(temporary))
+
+    def test_supervisor_waits_for_restarted_game_and_reports_its_failure(self):
+        for exit_code in (0, 7):
+            with self.subTest(exit_code=exit_code), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                marker = root / 'restarted'
+                script = root / 'fracture'
+                script.write_text(f'#!{sys.executable}\n'
+                                  'import os,time\n'
+                                  'if os.fork(): os._exit(0)\n'
+                                  'time.sleep(0.1)\n'
+                                  f'open({str(marker)!r}, "w").write("done")\n'
+                                  f'os._exit({exit_code})\n')
+                script.chmod(0o755)
+                self.assertEqual(native.run_game(script, root, dict(os.environ)), exit_code)
+                self.assertEqual(marker.read_text(), 'done')

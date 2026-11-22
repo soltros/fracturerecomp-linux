@@ -1,5 +1,6 @@
 """Host-side UI and game entry point; PRoot is reserved for compilation."""
 import argparse
+import ctypes
 import fcntl
 import json
 import os
@@ -73,6 +74,27 @@ def relocate_binary(appdir, binary, libraries):
                         '--force-rpath', '--set-rpath', libraries, str(binary)], check=True)
 
 
+def run_game(binary, game, env):
+    # Keep the AppImage mounted when the settings screen restarts the game.
+    # Linux reparents the replacement process here when the first game exits.
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+        raise OSError(ctypes.get_errno(), 'Could not supervise game restarts')
+    process = subprocess.Popen([str(binary), '--game_data_root=' + str(game)], env=env)
+    exit_code = 0
+    while True:
+        try:
+            pid, status = os.wait()
+        except ChildProcessError:
+            break
+        result = os.waitstatus_to_exitcode(status)
+        if pid == process.pid:
+            process.returncode = result
+        if result:
+            exit_code = result if result > 0 else 128 - result
+    return exit_code
+
+
 def play(appdir, state):
     portable = bool(os.environ.get('RECOMPLAUNCHER_DATA'))
     if portable and not (state / 'prepared.json').is_file():
@@ -88,7 +110,7 @@ def play(appdir, state):
     env, libraries = runtime_environment(appdir, state, portable)
     relocate_binary(appdir, binary, libraries)
     os.chdir(binary.parent)
-    os.execve(binary, [str(binary), '--game_data_root=' + str(game)], env)
+    return run_game(binary, game, env)
 
 
 def main():
@@ -112,8 +134,7 @@ def main():
         except BlockingIOError:
             raise RuntimeError('Another Fracture build or game is already running.')
         if args.play:
-            os.set_inheritable(lock.fileno(), True)
-            play(appdir, state)
+            return play(appdir, state)
         else:
             result = json.loads((state / 'last-build.json').read_text())
             add_shortcut(appdir, state, result)
@@ -121,7 +142,7 @@ def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        sys.exit(main())
     except SetupMissing as error:
         print(f'Error: {error}', file=sys.stderr, flush=True)
         sys.exit(3)

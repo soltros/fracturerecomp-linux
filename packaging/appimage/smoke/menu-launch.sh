@@ -8,6 +8,7 @@ mkdir -p "$FRACTURE_BUILDER_DATA/menu-fixture/game"
 cp "$FRACTURE_BUILDER_DATA/toolchain-smoke/native-game" "$FRACTURE_BUILDER_DATA/menu-fixture/fracture"
 export FRACTURE_SMOKE_LOG="$FRACTURE_BUILDER_DATA/menu-launch-ok"
 export FRACTURE_SMOKE_GAME="$FRACTURE_BUILDER_DATA/menu-fixture/game"
+export FRACTURE_SMOKE_RESTART=1
 chmod +x "$FRACTURE_BUILDER_DATA/menu-fixture/fracture"
 printf '{"binary":"/work/menu-fixture/fracture","game":"/work/menu-fixture/game"}\n' \
     > "$FRACTURE_BUILDER_DATA/last-build.json"
