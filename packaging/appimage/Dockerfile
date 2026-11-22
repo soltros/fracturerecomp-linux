@@ -27,13 +27,16 @@ RUN git clone --branch v0.10.0 --depth 1 --recurse-submodules --shallow-submodul
     && cmake --build /tmp/sdk-build --target install --parallel "${BUILD_JOBS}" \
     && rm -rf /tmp/sdk-build /opt/rexglue-source/out \
     && find /opt/rexglue-source -name .git -prune -exec rm -rf '{}' +
+# Runtime ELF relocation must not put the game under the build-time PRoot tracer.
+RUN apt-get update && apt-get install -y --no-install-recommends patchelf \
+    && rm -rf /var/lib/apt/lists/*
 # Explicit allowlist: never COPY the checkout, local generated code, XEXs, or ISOs.
 COPY CMakeLists.txt CMakePresets.json fracture_v1_manifest.toml fracture_v2_manifest.toml README.md UPSTREAM.md /opt/fracture-source/
 COPY cmake/ /opt/fracture-source/cmake/
 COPY config/ /opt/fracture-source/config/
 COPY src/ /opt/fracture-source/src/
 COPY tools/setup.py tools/xdvdfs.py /opt/fracture-source/tools/
-COPY packaging/appimage/builder.py packaging/appimage/launcher.py packaging/appimage/desktop.py packaging/appimage/prepare.py /opt/fracture-builder/
+COPY packaging/appimage/builder.py packaging/appimage/launcher.py packaging/appimage/desktop.py packaging/appimage/prepare.py packaging/appimage/native.py /opt/fracture-builder/
 COPY packaging/appimage/fracture-builder.png /opt/fracture-builder/
 COPY packaging/appimage/smoke/ /opt/fracture-builder/smoke/
 ARG SOURCE_ID

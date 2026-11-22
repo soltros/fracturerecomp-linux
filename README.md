@@ -38,6 +38,11 @@ game settings, and start Fracture directly. It extracts the AppImage and runs
 `AppRun`; no FUSE mount, `$APPIMAGE`, separate runtime copy, or builder window
 is needed in this mode.
 
+Play runs the native game outside PRoot, using the bundled Linux libraries
+and Mesa drivers. PRoot is used only by the build tools. Existing AppImage
+builds can use this launch fix without recompiling: open the updated AppImage
+and press Play once to refresh the Games-menu runtime.
+
 Preparation retains the assets under `recompdata/game`, and generated build
 files go under `recompdata/cache`. Later updates can rebuild from that retained
 copy even after the original ISO/folder is removed. The packaged profile's
