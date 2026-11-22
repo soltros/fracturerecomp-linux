@@ -1,4 +1,4 @@
-name: Publish standalone AppImage
+name: Publish AppImage and launcher profile
 on:
   workflow_dispatch:
     inputs:
@@ -9,9 +9,9 @@ on:
       tag:
         description: New release tag
         required: true
-        default: v0.1.3
+        default: v0.1.4
   push:
-    branches: [appimage-builder, recomplauncher-support]
+    branches: [main, appimage-builder, recomplauncher-support]
     paths: ['.github/workflows/publish-appimage.yml']
 permissions:
   actions: read
@@ -25,7 +25,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       BUILD_RUN: ${{ inputs.run_id || '44980361024' }}
-      RELEASE_TAG: ${{ inputs.tag || 'v0.1.3' }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.1.4' }}
       RELEASE_TARGET: ${{ github.sha }}
     steps:
       - name: Download and verify the tested AppImage
@@ -39,17 +39,23 @@ jobs:
           test "${#images[@]}" = 1
           mv -- "${images[0]}" FractureBuilder-Linux-x86_64.AppImage
           chmod +x FractureBuilder-Linux-x86_64.AppImage
-      - name: Publish only the standalone AppImage
+          # Use the exact embedded profile, including its source build ID.
+          ./FractureBuilder-Linux-x86_64.AppImage --appimage-extract recomplauncher.json >/dev/null
+          python3 -m json.tool squashfs-root/recomplauncher.json >/dev/null
+          cp squashfs-root/recomplauncher.json recomplauncher.json
+      - name: Publish the AppImage and matching launcher profile
         run: |
           set -euo pipefail
           cat > /tmp/release-notes.txt <<'EOF'
-          Self-contained Fracture Recomp builder for Linux x86_64, now with RecompLauncher support.
+          Release metadata fix: recomplauncher.json is attached as a separate release asset as well as embedded in the AppImage. This uses the same tested AppImage as v0.1.3; existing users do not need to rebuild the game.
+
+          Self-contained Fracture Recomp builder for Linux x86_64, with RecompLauncher support.
 
           Download FractureBuilder-Linux-x86_64.AppImage, mark it executable, and open it. Select your own supported Fracture Xbox 360 ISO or extracted game folder, then choose Build game and Play. The compiler and SDK are included; builds work offline. No game assets are distributed.
 
           RecompLauncher can extract this AppImage, read its embedded profile, prepare the native game without a builder window, and start it directly. Preparation reports progress and retains your assets for future rebuilds. Saves, settings, logs, and caches stay in the launcher's data folder. Six existing display/graphics settings are exposed in the launcher. Known executable SHA-256 checks remain enforced; no unverified whole-disc CRC values are claimed.
 
-          Addresses the AppImage black-window startup regression by launching the game outside the build-time tracer. The UI and game now run natively with the bundled Linux libraries and Mesa; PRoot is used only for compilation. Existing builds do not need recompiling: open this AppImage and press Play to update the Games-menu launcher. Normal standalone use keeps the existing UI and Games-menu shortcut. No sidecar profile or additional download is required: this release has one uploaded asset.
+          Addresses the AppImage black-window startup regression by launching the game outside the build-time tracer. The UI and game now run natively with the bundled Linux libraries and Mesa; PRoot is used only for compilation. Existing builds do not need recompiling: open this AppImage and press Play to update the Games-menu launcher. Normal standalone use keeps the existing UI and Games-menu shortcut. Players need only the AppImage. The matching recomplauncher.json is also attached for release and submission detection, and remains embedded in the AppImage.
 
           Validation: official profile schema, all 24 automated tests, native SDK compile/link/run checks, offline extracted-install setup/error handling, actual ELF game fixtures with no tracer attached, direct launch, relocation and settings-style restarts, and default UI startup without new arguments. RecompLauncher's Developer-tab flow and gameplay still require interactive validation.
 
@@ -58,12 +64,14 @@ jobs:
           gh release create "$RELEASE_TAG" \
             --target "$RELEASE_TARGET" \
             --title "Fracture Recomp Linux Builder $RELEASE_TAG" \
-            --notes-file /tmp/release-notes.txt --latest \
-            artifact/FractureBuilder-Linux-x86_64.AppImage
-      - name: Verify the public release has exactly one uploaded asset
+            --notes-file /tmp/release-notes.txt --draft \
+            artifact/FractureBuilder-Linux-x86_64.AppImage artifact/recomplauncher.json
+      - name: Publish only after both assets are attached
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest
+      - name: Verify the public release has the AppImage and launcher profile
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --json url,isDraft,isPrerelease,assets \
             --jq '{url, isDraft, isPrerelease, assets: [.assets[].name]}'
-          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" = 1
-          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[0].name')" = FractureBuilder-Linux-x86_64.AppImage
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" = 2
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '[.assets[].name] | sort | join(",")')" = FractureBuilder-Linux-x86_64.AppImage,recomplauncher.json
