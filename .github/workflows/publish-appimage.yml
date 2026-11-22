@@ -5,13 +5,13 @@ on:
       run_id:
         description: Successful offline builder workflow run
         required: true
-        default: '44956928444'
+        default: '44980361024'
       tag:
         description: New release tag
         required: true
-        default: v0.1.2
+        default: v0.1.3
   push:
-    branches: [appimage-builder]
+    branches: [appimage-builder, recomplauncher-support]
     paths: ['.github/workflows/publish-appimage.yml']
 permissions:
   actions: read
@@ -24,8 +24,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      BUILD_RUN: ${{ inputs.run_id || '44956928444' }}
-      RELEASE_TAG: ${{ inputs.tag || 'v0.1.2' }}
+      BUILD_RUN: ${{ inputs.run_id || '44980361024' }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.1.3' }}
       RELEASE_TARGET: ${{ github.sha }}
     steps:
       - name: Download and verify the tested AppImage
@@ -37,29 +37,33 @@ jobs:
           sha256sum --check ./*.AppImage.sha256
           mapfile -t images < <(find . -maxdepth 1 -type f -name '*.AppImage')
           test "${#images[@]}" = 1
-          mv -- "${images[0]}" FractureBuilder-x86_64.AppImage
-          chmod +x FractureBuilder-x86_64.AppImage
+          mv -- "${images[0]}" FractureBuilder-Linux-x86_64.AppImage
+          chmod +x FractureBuilder-Linux-x86_64.AppImage
       - name: Publish only the standalone AppImage
         run: |
           set -euo pipefail
           cat > /tmp/release-notes.txt <<'EOF'
-          Self-contained Fracture Recomp builder for Linux x86_64.
+          Self-contained Fracture Recomp builder for Linux x86_64, now with RecompLauncher support.
 
-          Download FractureBuilder-x86_64.AppImage, mark it executable, and open it. Select your own Xbox 360 ISO or extracted game folder, then choose Build game and Play. The compiler and SDK are included, and game builds work offline. No game assets are distributed.
+          Download FractureBuilder-Linux-x86_64.AppImage, mark it executable, and open it. Select your own supported Fracture Xbox 360 ISO or extracted game folder, then choose Build game and Play. The compiler and SDK are included; builds work offline. No game assets are distributed.
 
-          Successful builds now add Fracture to the Games section of the Linux application menu. The shortcut starts the game directly. For an existing build, press Play once in this updated builder to add the entry without recompiling. Rebuilding updates the same menu entry. A managed runtime copy in the data folder keeps normal AppImage installs working after the original download is moved or deleted.
+          RecompLauncher can extract this AppImage, read its embedded profile, prepare the native game without a builder window, and start it directly. Preparation reports progress and retains your assets for future rebuilds. Saves, settings, logs, and caches stay in the launcher's data folder. Six existing display/graphics settings are exposed in the launcher. Known executable SHA-256 checks remain enforced; no unverified whole-disc CRC values are claimed.
 
-          Requirements: x86-64-v2 CPU, X11 or XWayland, ptrace permitted, and Intel/AMD Vulkan graphics supported by the bundled Mesa drivers. Proprietary NVIDIA drivers are not integrated. Packaging, all 14 tests, and an offline SDK compile/link/run check and a packaged menu-to-game launch as an ordinary user passed; gameplay with user-provided assets still needs validation.
+          Addresses the AppImage black-window startup regression by launching the game outside the build-time tracer. The UI and game now run natively with the bundled Linux libraries and Mesa; PRoot is used only for compilation. Existing builds do not need recompiling: open this AppImage and press Play to update the Games-menu launcher. Normal standalone use keeps the existing UI and Games-menu shortcut. No sidecar profile or additional download is required: this release has one uploaded asset.
+
+          Validation: official profile schema, all 24 automated tests, native SDK compile/link/run checks, offline extracted-install setup/error handling, actual ELF game fixtures with no tracer attached, direct launch, relocation and settings-style restarts, and default UI startup without new arguments. RecompLauncher's Developer-tab flow and gameplay still require interactive validation.
+
+          Requirements: x86-64-v2 CPU, X11 or XWayland, ptrace permitted, and Intel/AMD Vulkan graphics supported by the bundled Ubuntu 24.04 Mesa drivers. Proprietary NVIDIA drivers are not integrated. Flatpak sandbox compatibility and the minimum GPU feature floor have not been verified.
           EOF
           gh release create "$RELEASE_TAG" \
             --target "$RELEASE_TARGET" \
             --title "Fracture Recomp Linux Builder $RELEASE_TAG" \
             --notes-file /tmp/release-notes.txt --latest \
-            artifact/FractureBuilder-x86_64.AppImage
+            artifact/FractureBuilder-Linux-x86_64.AppImage
       - name: Verify the public release has exactly one uploaded asset
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --json url,isDraft,isPrerelease,assets \
             --jq '{url, isDraft, isPrerelease, assets: [.assets[].name]}'
           test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" = 1
-          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[0].name')" = FractureBuilder-x86_64.AppImage
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[0].name')" = FractureBuilder-Linux-x86_64.AppImage

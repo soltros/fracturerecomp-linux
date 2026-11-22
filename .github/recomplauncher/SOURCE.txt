@@ -1,0 +1,5 @@
+Official schema: https://github.com/elripalda/RecompLauncher-SDK/blob/main/schema/recomplauncher.json
+Downloaded 2026-11-21 through the connected GitHub API.
+See LICENSE for the upstream MIT notice.
+Run: python3 tools/validate_recomplauncher.py
+Vendored schema SHA-256: a9d4ffca7c0f92579bbe0395006910b6d6968b5c7a66825ba92e98a68f4c7af1

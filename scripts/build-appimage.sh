@@ -38,6 +38,12 @@ cp "$appdir/rootfs/usr/bin/proot" "$appdir/bootstrap/proot"
 docker run --rm "$image" /bin/sh -c 'ldd /usr/bin/proot' > "$stage/ldd.txt"
 python3 packaging/appimage/bootstrap_libs.py "$appdir" "$stage/ldd.txt"
 chmod +x "$appdir/AppRun"
+python3 - "$appdir" "$source_id" <<'PY'
+import json, pathlib, sys
+profile = json.loads(pathlib.Path('recomplauncher.json').read_text())
+profile['prepare']['version'] = sys.argv[2]
+(pathlib.Path(sys.argv[1]) / 'recomplauncher.json').write_text(json.dumps(profile, indent=2) + '\n')
+PY
 FRACTURE_BUILDER_DATA="$stage/smoke-state" "$appdir/AppRun" --self-test
 # Pin the packaging tool by digest, even though its download tag is mutable.
 tool="$output/appimagetool-x86_64.AppImage"

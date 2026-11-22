@@ -1,5 +1,11 @@
 # Fracture Recomp for Linux
 
+<a href="https://recomplauncher.com"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
+
+Bring your own Fracture Xbox 360 ISO or extracted `default.xex` + `resources/`
+folder. Open the AppImage to build and play, or let RecompLauncher handle setup.
+No game files are included.
+
 A native Linux port of [ASarafanov/fracturerecomp](https://github.com/ASarafanov/fracturerecomp), targeting Vulkan as the graphics backend.
 
 This repository is an independent Linux port of [ASarafanov/fracturerecomp](https://github.com/ASarafanov/fracturerecomp). Upstream has no declared license; see [UPSTREAM.md](UPSTREAM.md) for the imported revision and attribution. This repository does not include game data. Keep files extracted from a legally owned copy outside version control; no copyrighted game files should be committed or distributed here.
@@ -24,6 +30,40 @@ See [PORTING.md](PORTING.md) for the observed build structure, platform boundari
 
 ## Build & Play AppImage
 
+### RecompLauncher
+
+The AppImage embeds `recomplauncher.json` at its root. RecompLauncher can pick
+your ISO or extracted copy, run windowless preparation, expose the existing
+game settings, and start Fracture directly. It extracts the AppImage and runs
+`AppRun`; no FUSE mount, `$APPIMAGE`, separate runtime copy, or builder window
+is needed in this mode.
+
+Play runs the native game outside PRoot, using the bundled Linux libraries
+and Mesa drivers. PRoot is used only by the build tools. Existing AppImage
+builds can use this launch fix without recompiling: open the updated AppImage
+and press Play once to refresh the Games-menu runtime.
+
+Preparation retains the assets under `recompdata/game`, and generated build
+files go under `recompdata/cache`. Later updates can rebuild from that retained
+copy even after the original ISO/folder is removed. The packaged profile's
+preparation version is the source build ID, so changed code is rebuilt when
+needed. Only a successful build commits the completion marker.
+
+`--data DIRECTORY` (or `RECOMPLAUNCHER_DATA`) selects one portable data folder:
+`settings.toml`, `saves/`, `logs/`, `cache/`, and retained game files all stay
+there. The normal standalone UI and data paths remain the default when the
+new arguments/environment are absent.
+
+```sh
+./FractureBuilder-Linux-x86_64.AppImage --prepare --game="/path/to/Fracture.iso" --data "/path/to/recompdata"
+./FractureBuilder-Linux-x86_64.AppImage --play --data "/path/to/recompdata"
+```
+
+The schema is vendored under `.github/recomplauncher` and checked in CI with
+`python3 tools/validate_recomplauncher.py`. Known executable SHA-256 values
+remain enforced by the existing installer; the profile makes no whole-disc
+verified-dump claim because verified disc CRC32/size pairs are not available.
+
 The offline builder AppImage packages Clang 20, CMake, Ninja, Python, and a
 prebuilt Vulkan-only ReXGlue SDK. You supply the game files; the app validates
 them and builds the matching native Linux game module. It does not download
@@ -33,9 +73,9 @@ The packaging workflow has produced an AppImage and passed an offline
 compiler/SDK smoke test. Actual gameplay with user-provided assets still
 needs validation before calling this a tested game release.
 
-1. Download `FractureBuilder-…-x86_64.AppImage` from the **Offline builder
-   AppImage** workflow's artifact in [Actions](https://github.com/soltros/fracturerecomp-linux/actions).
-   Unzip the artifact and mark the AppImage executable in your file manager
+1. Download `FractureBuilder-Linux-x86_64.AppImage` from the
+   [latest release](https://github.com/soltros/fracturerecomp-linux/releases/latest).
+   Mark the AppImage executable in your file manager
    (or run `chmod +x FractureBuilder-*.AppImage`).
 2. Open it and choose your legally owned Fracture Xbox 360 ISO, or an extracted
    folder containing `default.xex` and `resources/`. Keep the files in your

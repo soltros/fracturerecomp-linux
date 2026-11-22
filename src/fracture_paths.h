@@ -8,6 +8,7 @@
 #pragma once
 
 #include <filesystem>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 
@@ -30,6 +31,18 @@ inline std::filesystem::path PathFromText(std::string_view text) {
   } catch (const std::exception&) {
     return {};
   }
+}
+
+// Explicit launcher data is opt-in. The standalone game's paths stay intact.
+inline std::filesystem::path LauncherDataRoot() {
+  const char* value = std::getenv("RECOMPLAUNCHER_DATA");
+  if (value && *value) {
+    auto path = PathFromText(value);
+    if (path.is_absolute()) {
+      return path;
+    }
+  }
+  return {};
 }
 
 }  // namespace fracture

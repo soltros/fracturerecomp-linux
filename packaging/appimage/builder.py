@@ -13,15 +13,27 @@ import sys
 
 SOURCE = Path('/opt/fracture-source')
 SDK = Path('/opt/fracture-sdk')
-STATE = Path('/work')
+STATE = Path(os.environ.get('RECOMPLAUNCHER_DATA') or '/work')
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from desktop import install_shortcut
+import prepare as launcher_prepare
 
 sys.path.insert(0, str(SOURCE / 'tools'))
 
 
 class BuildError(Exception):
     pass
+
+
+class SetupRequiredError(BuildError):
+    pass
+
+
+PREPARING = False
+
+
+def portable_data():
+    return bool(os.environ.get('RECOMPLAUNCHER_DATA'))
 
 
 def validate_xex(data):
@@ -83,7 +95,16 @@ def read_assets(source):
 
 def run(command, cwd):
     print('+ ' + ' '.join(map(str, command)), flush=True)
-    subprocess.run(list(map(str, command)), cwd=cwd, check=True)
+    if not PREPARING:
+        subprocess.run(list(map(str, command)), cwd=cwd, check=True)
+        return
+    with subprocess.Popen(list(map(str, command)), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, errors='replace') as process:
+        for line in process.stdout:
+            print(line, end='', flush=True)
+            launcher_prepare.build_progress(command, line)
+        if process.wait():
+            raise subprocess.CalledProcessError(process.returncode, command)
 
 
 def default_jobs():
@@ -96,15 +117,19 @@ def default_jobs():
     return max(1, min(8, os.cpu_count() or 2, available // (2 << 30)))
 
 
-def build(source, jobs):
+def build(source, jobs, prepare=False):
     import xdvdfs
     source = source.expanduser().resolve(strict=True)
     print('Checking your game files…', flush=True)
+    if prepare:
+        launcher_prepare.progress(0, 'Checking your Fracture copy')
+        (STATE / 'prepared.json').unlink(missing_ok=True)
     release, digest, data, entries = read_assets(source)
     # Build workspaces are keyed by source revision, preventing stale copied source
     # after an AppImage update. The SDK is already installed in the image.
     revision = (SOURCE / 'BUILD-ID').read_text().strip()
-    workspace = STATE / 'builds' / revision / release
+    build_root = STATE / 'cache' if prepare else STATE
+    workspace = build_root / 'builds' / revision / release
     workspace.mkdir(parents=True, exist_ok=True)
     tree = workspace / 'source'
     if not tree.exists():
@@ -114,7 +139,7 @@ def build(source, jobs):
         shutil.copytree(SOURCE, temporary)
         temporary.rename(tree)
     if entries is not None:
-        game = workspace / 'game'
+        game = STATE / 'game' if prepare else workspace / 'game'
         game.mkdir(exist_ok=True)
         files = [e for e in entries if not e.is_dir and not e.path.lower().startswith('$systemupdate/')]
         destinations = [safe_destination(game, e.path) for e in files]
@@ -145,12 +170,14 @@ def build(source, jobs):
                 for index, (entry, dest) in enumerate(zip(files, destinations), 1):
                     print(f'Extracting {index}/{len(files)}: {entry.path}', flush=True)
                     xdvdfs.extract(disc, entry, str(dest))
+                    if prepare:
+                        launcher_prepare.progress(0.05 + 0.15 * index / len(files), 'Extracting your game files')
         if not (game / 'resources').is_dir():
             raise BuildError('The extracted disc has no resources/ directory.')
         (game / 'default.xex').write_bytes(data)
         marker.write_text(json.dumps(identity))
     else:
-        game = source
+        game = launcher_prepare.retain_folder(source, STATE) if prepare else source
     xex_dir = tree / 'xex' / release
     xex_dir.mkdir(parents=True, exist_ok=True)
     (xex_dir / 'default.xex').write_bytes(data)
@@ -160,6 +187,8 @@ def build(source, jobs):
                  '-DCMAKE_CXX_COMPILER=clang++-20', f'-DCMAKE_PREFIX_PATH={SDK}',
                  f'-DFRACTURE_RELEASES={release}', '-DREXGLUE_RECOMP_DEBUG_INFO=none',
                  '-DREXGLUE_USE_D3D12=OFF', '-DREXGLUE_USE_VULKAN=ON']
+    if prepare:
+        launcher_prepare.progress(0.22, 'Configuring the native Linux build')
     run(configure, tree)
     run(['cmake', '--build', output, '--target', 'fracture_codegen', '--parallel', jobs], tree)
     run(configure, tree)
@@ -170,8 +199,15 @@ def build(source, jobs):
     # JSON strings are valid TOML basic strings for filesystem paths on Linux.
     (output / 'fracture.toml').write_text('game_data_root = ' + json.dumps(str(game), ensure_ascii=False) + '\n')
     result = {'binary': str(binary), 'game': str(game), 'release': release, 'sha256': digest}
-    add_game_shortcut(result)
+    if prepare:
+        (STATE / 'fracture.toml').write_text('game_data_root = ' + json.dumps(str(game), ensure_ascii=False) + '\n')
+        for directory in ('saves', 'logs', 'cache'):
+            (STATE / directory).mkdir(exist_ok=True)
+    elif not portable_data():
+        add_game_shortcut(result)
     save_result(result)
+    if prepare:
+        launcher_prepare.publish_build(STATE, output, result)
     if result.get('shortcut'):
         print('Build complete. Launch Fracture from the Games menu, or press Play.', flush=True)
     else:
@@ -199,6 +235,8 @@ def add_game_shortcut(result):
 
 
 def installed_game():
+    if portable_data() and not (STATE / 'prepared.json').is_file():
+        raise SetupRequiredError('The game needs preparation. Run Set Up Again in RecompLauncher.')
     result = json.loads((STATE / 'last-build.json').read_text())
     if not Path(result['binary']).is_file() or not Path(result['game']).is_dir():
         raise BuildError('Game files have moved. Select their new location and build again.')
@@ -209,20 +247,32 @@ def play():
     result = installed_game()
     binary = Path(result['binary'])
     # Upgrade an existing build's menu integration without recompiling it.
-    if not result.get('shortcut'):
+    if not result.get('shortcut') and not portable_data():
         add_game_shortcut(result)
         save_result(result)
     os.chdir(binary.parent)
-    os.execv(str(binary), [str(binary)])
+    command = [str(binary)]
+    if portable_data():
+        command.append('--game_data_root=' + result['game'])
+    os.execv(str(binary), command)
 
 
 def main():
+    global PREPARING, STATE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', type=Path, metavar='ISO_OR_FOLDER')
     parser.add_argument('--play', action='store_true')
+    parser.add_argument('--prepare', action='store_true', help='windowless setup from your copy of Fracture')
+    parser.add_argument('--game', type=Path, help='your Xbox 360 ISO or extracted game folder')
+    parser.add_argument('--data', type=Path, help='portable data directory (mapped by AppRun)')
     parser.add_argument('--install-shortcut', action='store_true', help='add an existing build to the Games menu')
     parser.add_argument('--jobs', type=int, default=default_jobs())
     args = parser.parse_args()
+    if args.data and not os.environ.get('FRACTURE_DATA_MAPPED'):
+        STATE = args.data.expanduser().resolve()
+        os.environ['RECOMPLAUNCHER_DATA'] = str(STATE)
+    if args.prepare and not portable_data():
+        parser.error('--prepare requires --data or RECOMPLAUNCHER_DATA')
     if not 1 <= args.jobs <= 256:
         parser.error('--jobs must be between 1 and 256')
     STATE.mkdir(parents=True, exist_ok=True)
@@ -236,19 +286,32 @@ def main():
             os.set_inheritable(lock.fileno(), True)
             play()
         elif args.build:
-            build(args.build, args.jobs)
+            if portable_data():
+                PREPARING = True
+                with launcher_prepare.preparation_log(STATE):
+                    build(args.build, args.jobs, prepare=True)
+            else:
+                build(args.build, args.jobs)
+        elif args.prepare:
+            PREPARING = True
+            source = Path(os.environ.get('FRACTURE_INPUT_GAME') or args.game or STATE / 'game')
+            with launcher_prepare.preparation_log(STATE):
+                build(source, args.jobs, prepare=True)
         elif args.install_shortcut:
             result = installed_game()
             if not add_game_shortcut(result):
                 raise BuildError('Could not install the Games menu shortcut. See the warning above.')
             save_result(result)
         else:
-            parser.error('choose --build, --play, or --install-shortcut')
+            parser.error('choose --build, --prepare, --play, or --install-shortcut')
 
 
 if __name__ == '__main__':
     try:
         main()
+    except SetupRequiredError as error:
+        print(f'Error: {error}', file=sys.stderr, flush=True)
+        sys.exit(3)
     except (BuildError, OSError, ValueError, struct.error, RecursionError, subprocess.CalledProcessError) as error:
         print(f'Error: {error}', file=sys.stderr, flush=True)
         sys.exit(1)
