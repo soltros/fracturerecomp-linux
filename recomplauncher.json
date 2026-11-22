@@ -38,14 +38,20 @@
     "done": [
       "{data}/prepared.json",
       "{data}/last-build.json",
-      "{data}/game-build/fracture"
+      "{data}/game-build/fracture",
+      "{data}/game/default.xex",
+      "{data}/game/resources"
     ]
   },
   "config": [
     {
       "id": "main",
       "format": "toml",
-      "file": "{data}/settings.toml"
+      "file": [
+        {
+          "path": "{data}/settings.toml"
+        }
+      ]
     }
   ],
   "saves": [
@@ -55,7 +61,7 @@
   "folders": {
     "game": [
       {
-        "path": "{data}/game"
+        "path": "{data}"
       }
     ],
     "saves": [
