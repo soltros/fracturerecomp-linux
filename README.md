@@ -68,9 +68,9 @@ The packaging workflow has produced an AppImage and passed an offline
 compiler/SDK smoke test. Actual gameplay with user-provided assets still
 needs validation before calling this a tested game release.
 
-1. Download `FractureBuilder-…-x86_64.AppImage` from the **Offline builder
-   AppImage** workflow's artifact in [Actions](https://github.com/soltros/fracturerecomp-linux/actions).
-   Unzip the artifact and mark the AppImage executable in your file manager
+1. Download `FractureBuilder-Linux-x86_64.AppImage` from the
+   [latest release](https://github.com/soltros/fracturerecomp-linux/releases/latest).
+   Mark the AppImage executable in your file manager
    (or run `chmod +x FractureBuilder-*.AppImage`).
 2. Open it and choose your legally owned Fracture Xbox 360 ISO, or an extracted
    folder containing `default.xex` and `resources/`. Keep the files in your

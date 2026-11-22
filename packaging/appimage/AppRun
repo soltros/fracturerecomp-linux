@@ -55,7 +55,7 @@ if [ "$#" -eq 0 ]; then
 else
     case "$1" in
         --self-test)
-            set -- /bin/sh -ec 'clang++-20 --version; cmake --version; ninja --version; /opt/fracture-sdk/bin/rexglue --version; cmake -S /opt/fracture-builder/smoke -B /work/toolchain-smoke -G Ninja -DCMAKE_CXX_COMPILER=clang++-20 -DCMAKE_PREFIX_PATH=/opt/fracture-sdk; cmake --build /work/toolchain-smoke; /work/toolchain-smoke/sdk-smoke; /work/toolchain-smoke/portable-paths; python3 -c "import tkinter; import sys; sys.path.insert(0, \"/opt/fracture-builder\"); import builder; assert builder.default_jobs() >= 1; print(\"Offline toolchain ready\")"'
+            set -- /bin/sh -ec 'clang++-20 --version; cmake --version; ninja --version; /opt/fracture-sdk/bin/rexglue --version; cmake -S /opt/fracture-builder/smoke -B /work/toolchain-smoke -G Ninja -DCMAKE_CXX_COMPILER=clang++-20 -DCMAKE_PREFIX_PATH=/opt/fracture-sdk; cmake --build /work/toolchain-smoke --parallel 2; /work/toolchain-smoke/sdk-smoke; /work/toolchain-smoke/portable-paths; python3 -c "import tkinter; import sys; sys.path.insert(0, \"/opt/fracture-builder\"); import builder; assert builder.default_jobs() >= 1; print(\"Offline toolchain ready\")"'
             ;;
         --build|--play|--prepare|--game|--game=*|--data|--data=*|--install-shortcut|--help)
             set -- /usr/bin/python3 /opt/fracture-builder/builder.py "$@"
