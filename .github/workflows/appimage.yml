@@ -58,7 +58,7 @@ jobs:
           # The builder must work without a compiler or Python on PATH and
           # with networking disabled. One ordinary account extracts and runs
           # the image, matching the player flow. Game assets never enter CI.
-          docker run --rm --network none --user 1000:1000 \
+          docker run --rm --network none --user 1000:1000 --security-opt seccomp=unconfined \
             -e HOME=/tmp/fracture-home -e FRACTURE_BUILDER_DATA=/tmp/fracture-data \
             -e XDG_DATA_HOME=/tmp/fracture-xdg \
             -v "$artifact:/image/FractureBuilder.AppImage:ro" ubuntu:24.04 \
