@@ -32,9 +32,18 @@ def find_partition(f):
     raise ValueError("not an Xbox / Xbox 360 disc image (no XDVDFS volume)")
 
 
-def _walk(f, base, sector, size, prefix):
+def _walk(f, base, sector, size, prefix, visited=None, depth=0):
+    if visited is None:
+        visited = set()
+    if depth > 64 or (sector, size) in visited:
+        raise ValueError("cyclic or excessively deep XDVDFS directory tree")
+    if size > 16 << 20:
+        raise ValueError("XDVDFS directory table is too large")
+    visited.add((sector, size))
     f.seek(base + sector * SECTOR)
     data = f.read(size)
+    if len(data) != size:
+        raise ValueError("truncated XDVDFS directory table")
     stack = [0]
     seen = set()
     while stack:
@@ -46,12 +55,16 @@ def _walk(f, base, sector, size, prefix):
             "<HHIIBB", data, off)
         if left == 0xFFFF:  # sector padding
             continue
+        if not name_len or off + 14 + name_len > len(data):
+            raise ValueError("invalid XDVDFS file name")
         name = data[off + 14:off + 14 + name_len].decode("latin-1")
+        if name in (".", "..") or "/" in name or "\\" in name or "\0" in name:
+            raise ValueError("unsafe XDVDFS file name")
         path = prefix + name
         if attr & ATTR_DIRECTORY:
             yield Entry(path + "/", base + start * SECTOR, length, True)
             if length:
-                yield from _walk(f, base, start, length, path + "/")
+                yield from _walk(f, base, start, length, path + "/", visited, depth + 1)
         else:
             yield Entry(path, base + start * SECTOR, length, False)
         if left:
@@ -63,8 +76,16 @@ def _walk(f, base, sector, size, prefix):
 def list_entries(f):
     """All entries of the image, sorted by path."""
     base, root_sector, root_size = find_partition(f)
-    return sorted(_walk(f, base, root_sector, root_size, ""),
-                  key=lambda e: e.path)
+    entries = []
+    f.seek(0, os.SEEK_END)
+    image_size = f.tell()
+    for entry in _walk(f, base, root_sector, root_size, ""):
+        if len(entries) >= 100000:
+            raise ValueError("too many XDVDFS entries")
+        if entry.offset + entry.size > image_size:
+            raise ValueError(f"XDVDFS entry outside disc image: {entry.path}")
+        entries.append(entry)
+    return sorted(entries, key=lambda e: e.path)
 
 
 def read_file(f, entry):

@@ -236,6 +236,13 @@ class FractureApp : public rex::ReXApp {
   // log files, so wait here, before logging is initialized.
   void OnConfigurePaths(rex::PathConfig& paths) override {
     fracture::settings::WaitForPreviousProcess();
+    if (const auto data = fracture::LauncherDataRoot(); !data.empty()) {
+      paths.user_data_root = data / "saves";
+      paths.cache_root = data / "cache";
+      paths.config_path = data / "fracture.toml";
+      std::filesystem::create_directories(data / "logs");
+      REXCVAR_SET(log_file, fracture::PathText(data / "logs" / "fracture.log"));
+    }
     base_config_path_ = paths.config_path;
   }
 

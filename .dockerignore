@@ -1,0 +1,23 @@
+# Only redistributable build inputs enter the packaging container.
+**
+!CMakeLists.txt
+!CMakePresets.json
+!README.md
+!UPSTREAM.md
+!recomplauncher.json
+!fracture_v1_manifest.toml
+!fracture_v2_manifest.toml
+!cmake/
+!cmake/**
+!config/
+!config/**
+!src/
+!src/**
+!tools/
+!tools/setup.py
+!tools/xdvdfs.py
+!packaging/
+!packaging/appimage/
+!packaging/appimage/**
+**/__pycache__
+**/*.pyc

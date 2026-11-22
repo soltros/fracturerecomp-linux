@@ -1,0 +1,84 @@
+name: Offline builder AppImage
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['packaging/**', 'scripts/build-appimage.sh', 'src/**', 'cmake/**', 'config/**', 'tools/**', 'recomplauncher.json', '.github/recomplauncher/**', '.github/workflows/appimage.yml']
+  pull_request:
+    paths: ['packaging/**', 'scripts/build-appimage.sh', 'src/**', 'cmake/**', 'config/**', 'tools/**', 'recomplauncher.json', '.github/recomplauncher/**', '.github/workflows/appimage.yml']
+permissions:
+  contents: read
+concurrency:
+  group: appimage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test asset validation and build orchestration
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-pil python3-jsonschema xvfb desktop-file-utils libglib2.0-bin
+          python3 tools/validate_recomplauncher.py
+          xvfb-run -a -s '-screen 0 1280x1200x24' python3 -m unittest discover -s tests -v
+      - name: Save launcher previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Launcher-previews
+          path: out/previews/*.png
+          if-no-files-found: ignore
+      - name: Build offline AppImage
+        uses: docker/setup-buildx-action@v3
+      - name: Compute redistributable source ID
+        id: source
+        run: echo "id=$(python3 packaging/appimage/source_id.py)" >> "$GITHUB_OUTPUT"
+      - name: Build and cache the offline toolchain
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/appimage/Dockerfile
+          load: true
+          tags: fracture-builder:${{ steps.source.outputs.id }}
+          build-args: |
+            BUILD_JOBS=2
+            SOURCE_ID=${{ steps.source.outputs.id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Package offline AppImage
+        run: bash scripts/build-appimage.sh
+        env:
+          BUILD_JOBS: '2'
+          FRACTURE_USE_PREBUILT_IMAGE: '1'
+      - name: Smoke test without FUSE or network
+        run: |
+          artifact=$(find "$PWD/out/appimage" -maxdepth 1 -name 'FractureBuilder-*-x86_64.AppImage' -print -quit)
+          # The builder must work without a compiler or Python on PATH and
+          # with networking disabled. One ordinary account extracts and runs
+          # the image, matching the player flow. Game assets never enter CI.
+          docker run --rm --network none --user 1000:1000 --security-opt seccomp=unconfined \
+            -e HOME=/tmp/fracture-home -e FRACTURE_BUILDER_DATA=/tmp/fracture-data \
+            -e XDG_DATA_HOME=/tmp/fracture-xdg \
+            -v "$artifact:/image/FractureBuilder.AppImage:ro" ubuntu:24.04 \
+            /bin/sh -ec 'mkdir -p "$HOME"; cd /tmp; /image/FractureBuilder.AppImage --appimage-extract >/dev/null; /tmp/squashfs-root/AppRun --self-test; /bin/sh /tmp/squashfs-root/rootfs/opt/fracture-builder/smoke/menu-launch.sh /tmp/squashfs-root/AppRun /image/FractureBuilder.AppImage; /bin/sh /tmp/squashfs-root/rootfs/opt/fracture-builder/smoke/recomplauncher.sh /tmp/squashfs-root'
+      - name: Check embedded profile and unchanged default startup
+        run: |
+          artifact=$(find "$PWD/out/appimage" -maxdepth 1 -name 'FractureBuilder-*-x86_64.AppImage' -print -quit)
+          mkdir -p /tmp/fracture-default-start
+          cd /tmp/fracture-default-start
+          "$artifact" --appimage-extract >/dev/null
+          cd "$GITHUB_WORKSPACE"
+          python3 tools/validate_recomplauncher.py /tmp/fracture-default-start/squashfs-root/recomplauncher.json
+          xvfb-run -a python3 tools/check_legacy_startup.py /tmp/fracture-default-start/squashfs-root/AppRun
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: FractureBuilder-x86_64
+          path: |
+            out/appimage/FractureBuilder-*.AppImage
+            out/appimage/FractureBuilder-*.AppImage.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
