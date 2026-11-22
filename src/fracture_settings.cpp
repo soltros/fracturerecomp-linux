@@ -296,6 +296,9 @@ std::string OneLine(std::string text) {
 }  // namespace
 
 std::filesystem::path Path() {
+  if (const auto data = LauncherDataRoot(); !data.empty()) {
+    return data / kFileName;
+  }
   return rex::filesystem::GetExecutableFolder() / kFileName;
 }
 
