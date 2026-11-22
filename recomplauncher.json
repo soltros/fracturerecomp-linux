@@ -1,0 +1,238 @@
+{
+  "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
+  "format": 1,
+  "repo": "soltros/fracturerecomp-linux",
+  "name": "Fracture Recomp for Linux",
+  "game": {
+    "kind": "iso_or_folder",
+    "label": "Your Fracture Xbox 360 ISO, or an extracted folder with default.xex and resources/ (supported v1 or v2).",
+    "check": {
+      "file": "default.xex",
+      "xdvdfs": "default.xex"
+    }
+  },
+  "start": {
+    "program": [
+      "FractureBuilder-Linux-x86_64.AppImage"
+    ],
+    "args": [
+      "--play",
+      "--data",
+      "{data}"
+    ]
+  },
+  "prepare": {
+    "program": [
+      "FractureBuilder-Linux-x86_64.AppImage"
+    ],
+    "args": [
+      "--prepare",
+      "--game={game}",
+      "--data",
+      "{data}"
+    ],
+    "label": "Build Fracture from your copy",
+    "timeout": 14400,
+    "version": "0.1.3",
+    "keeps_copy": true,
+    "done": [
+      "{data}/prepared.json",
+      "{data}/last-build.json",
+      "{data}/game-build/fracture"
+    ]
+  },
+  "config": [
+    {
+      "id": "main",
+      "format": "toml",
+      "file": "{data}/settings.toml"
+    }
+  ],
+  "saves": [
+    "{data}/saves",
+    "{data}/settings.toml"
+  ],
+  "folders": {
+    "game": [
+      {
+        "path": "{data}/game"
+      }
+    ],
+    "saves": [
+      {
+        "path": "{data}/saves"
+      }
+    ],
+    "logs": [
+      {
+        "path": "{data}/logs"
+      }
+    ],
+    "cache": [
+      {
+        "path": "{data}/cache"
+      }
+    ]
+  },
+  "exit_codes": {
+    "3": "The native game build is missing. Choose Set Up Again to rebuild from your retained game files."
+  },
+  "settings": [
+    {
+      "id": "fullscreen",
+      "label": "Window mode",
+      "group": "Display",
+      "choices": [
+        {
+          "label": "Fullscreen",
+          "set": {
+            "fullscreen": "true"
+          }
+        },
+        {
+          "label": "Windowed",
+          "set": {
+            "fullscreen": "false"
+          }
+        }
+      ],
+      "defaults": {
+        "fullscreen": "true"
+      }
+    },
+    {
+      "id": "window_size",
+      "label": "Window size",
+      "group": "Display",
+      "when": {
+        "fullscreen": "false"
+      },
+      "choices": [
+        {
+          "label": "Default (1280 × 720)",
+          "set": {
+            "window_width": "0",
+            "window_height": "0"
+          }
+        },
+        {
+          "label": "1600 × 900",
+          "set": {
+            "window_width": "1600",
+            "window_height": "900"
+          }
+        },
+        {
+          "label": "1920 × 1080",
+          "set": {
+            "window_width": "1920",
+            "window_height": "1080"
+          }
+        },
+        {
+          "label": "2560 × 1440",
+          "set": {
+            "window_width": "2560",
+            "window_height": "1440"
+          }
+        }
+      ],
+      "defaults": {
+        "window_width": "0",
+        "window_height": "0",
+        "fullscreen": "true"
+      }
+    },
+    {
+      "id": "aspect",
+      "label": "Keep aspect ratio",
+      "group": "Display",
+      "help": "Keep the original 16:9 picture instead of stretching it.",
+      "choices": [
+        {
+          "label": "On",
+          "set": {
+            "present_letterbox": "true"
+          }
+        },
+        {
+          "label": "Off",
+          "set": {
+            "present_letterbox": "false"
+          }
+        }
+      ],
+      "defaults": {
+        "present_letterbox": "true"
+      }
+    },
+    {
+      "id": "frame_rate",
+      "label": "Frame rate",
+      "group": "Graphics",
+      "help": "Fracture was made for 30 FPS; 60 FPS is experimental because some timers count frames.",
+      "choices": [
+        {
+          "label": "30 FPS (original)",
+          "set": {
+            "fracture_frame_rate": "\"original\""
+          }
+        },
+        {
+          "label": "60 FPS (experimental)",
+          "set": {
+            "fracture_frame_rate": "\"60\""
+          }
+        }
+      ],
+      "defaults": {
+        "fracture_frame_rate": "\"original\""
+      }
+    },
+    {
+      "id": "vsync",
+      "label": "V-Sync",
+      "group": "Graphics",
+      "choices": [
+        {
+          "label": "On",
+          "set": {
+            "vsync": "true"
+          }
+        },
+        {
+          "label": "Off",
+          "set": {
+            "vsync": "false"
+          }
+        }
+      ],
+      "defaults": {
+        "vsync": "true"
+      }
+    },
+    {
+      "id": "tearing",
+      "label": "Allow tearing",
+      "group": "Graphics",
+      "help": "Present immediately for lower latency; the display may show tearing.",
+      "choices": [
+        {
+          "label": "On",
+          "set": {
+            "vulkan_allow_present_mode_immediate": "true"
+          }
+        },
+        {
+          "label": "Off",
+          "set": {
+            "vulkan_allow_present_mode_immediate": "false"
+          }
+        }
+      ],
+      "defaults": {
+        "vulkan_allow_present_mode_immediate": "true"
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@ root = Path(__file__).resolve().parents[2]
 digest = hashlib.sha256()
 files = [root / p for p in ('CMakeLists.txt', 'CMakePresets.json', 'README.md', 'UPSTREAM.md',
                             'fracture_v1_manifest.toml', 'fracture_v2_manifest.toml',
-                            'tools/setup.py', 'tools/xdvdfs.py', 'scripts/build-appimage.sh')]
+                            'tools/setup.py', 'tools/xdvdfs.py', 'scripts/build-appimage.sh', 'recomplauncher.json')]
 for directory in ('src', 'cmake', 'config', 'packaging/appimage'):
     files.extend(p for p in (root / directory).rglob('*')
                  if p.is_file() and '__pycache__' not in p.parts)

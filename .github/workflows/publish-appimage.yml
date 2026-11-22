@@ -11,7 +11,7 @@ on:
         required: true
         default: v0.1.2
   push:
-    branches: [appimage-builder]
+    branches: [appimage-builder, recomplauncher-support]
     paths: ['.github/workflows/publish-appimage.yml']
 permissions:
   actions: read
@@ -37,8 +37,8 @@ jobs:
           sha256sum --check ./*.AppImage.sha256
           mapfile -t images < <(find . -maxdepth 1 -type f -name '*.AppImage')
           test "${#images[@]}" = 1
-          mv -- "${images[0]}" FractureBuilder-x86_64.AppImage
-          chmod +x FractureBuilder-x86_64.AppImage
+          mv -- "${images[0]}" FractureBuilder-Linux-x86_64.AppImage
+          chmod +x FractureBuilder-Linux-x86_64.AppImage
       - name: Publish only the standalone AppImage
         run: |
           set -euo pipefail
@@ -55,11 +55,11 @@ jobs:
             --target "$RELEASE_TARGET" \
             --title "Fracture Recomp Linux Builder $RELEASE_TAG" \
             --notes-file /tmp/release-notes.txt --latest \
-            artifact/FractureBuilder-x86_64.AppImage
+            artifact/FractureBuilder-Linux-x86_64.AppImage
       - name: Verify the public release has exactly one uploaded asset
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --json url,isDraft,isPrerelease,assets \
             --jq '{url, isDraft, isPrerelease, assets: [.assets[].name]}'
           test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" = 1
-          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[0].name')" = FractureBuilder-x86_64.AppImage
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[0].name')" = FractureBuilder-Linux-x86_64.AppImage
