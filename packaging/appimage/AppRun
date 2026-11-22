@@ -53,6 +53,7 @@ export FRACTURE_SOURCE_IMAGE= FRACTURE_INPUT_GAME=
 # /work paths. Use our Python and libraries without requiring a host Python.
 if [ "$native_start" = 1 ]; then
         export FRACTURE_NATIVE_DATA="$data"
+        if [ -n "$portable_data" ]; then export RECOMPLAUNCHER_DATA="$data"; fi
         root="$APPDIR/rootfs"
         unset LD_LIBRARY_PATH LD_PRELOAD PYTHONPATH
         export PYTHONHOME="$root/usr"

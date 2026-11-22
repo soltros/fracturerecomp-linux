@@ -19,7 +19,9 @@ int main(int argc, char** argv) {
   while (std::getline(status, line)) {
     if (line.starts_with("TracerPid:")) assert(std::stoi(line.substr(10)) == 0);
   }
-  if (const char* data = std::getenv("RECOMPLAUNCHER_DATA")) {
+  const char* data = std::getenv("RECOMPLAUNCHER_DATA");
+  if (std::getenv("FRACTURE_SMOKE_EXPECT_PORTABLE")) assert(data);
+  if (data) {
     assert(std::string(data) != "/work");
     assert(std::filesystem::is_directory(data));
   }
