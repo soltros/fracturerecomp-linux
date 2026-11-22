@@ -16,3 +16,8 @@ target_include_directories(portable-paths PRIVATE /opt/fracture-source/src)
 target_compile_features(portable-paths PRIVATE cxx_std_23)
 target_compile_options(portable-paths PRIVATE -march=x86-64-v2)
 target_link_libraries(portable-paths PRIVATE rex::runtime)
+
+add_executable(native-game native_game.cpp)
+target_compile_features(native-game PRIVATE cxx_std_23)
+target_compile_options(native-game PRIVATE -UNDEBUG)
+target_link_libraries(native-game PRIVATE rex::runtime)

@@ -12,10 +12,13 @@ input_game=
 host_scratch=
 guest_scratch=/work/cache/tmp
 waiting=
+native_start=0
+[ "$#" -ne 0 ] || native_start=1
 for argument in "$@"; do
     if [ "$waiting" = data ]; then portable_data=$argument; waiting=; continue; fi
     if [ "$waiting" = game ]; then input_game=$argument; waiting=; continue; fi
     case "$argument" in
+        --play|--install-shortcut) native_start=1 ;;
         --data) waiting=data ;;
         --data=*) portable_data=${argument#--data=} ;;
         --game) waiting=game ;;
@@ -46,6 +49,19 @@ else
 fi
 export FRACTURE_HOST_LAUNCHER="$APPDIR/AppRun"
 export FRACTURE_SOURCE_IMAGE= FRACTURE_INPUT_GAME=
+# Run the UI and game outside PRoot. Only the compiler needs virtual /opt and
+# /work paths. Use our Python and libraries without requiring a host Python.
+if [ "$native_start" = 1 ]; then
+        export FRACTURE_NATIVE_DATA="$data"
+        root="$APPDIR/rootfs"
+        unset LD_LIBRARY_PATH LD_PRELOAD PYTHONPATH
+        export PYTHONHOME="$root/usr"
+        export TCL_LIBRARY="$root/usr/share/tcltk/tcl8.6"
+        export TK_LIBRARY="$root/usr/share/tcltk/tk8.6"
+        exec "$root/lib64/ld-linux-x86-64.so.2" \
+            --library-path "$root/usr/lib/x86_64-linux-gnu:$root/usr/lib:$root/opt/fracture-sdk/lib:$root/opt/fracture-sdk/lib64" \
+            "$root/usr/bin/python3" -u "$root/opt/fracture-builder/native.py" "$@"
+fi
 # The virtual paths /opt and /work keep the prebuilt SDK, CMake imports and
 # generated build files valid regardless of where the AppImage is stored.
 # PRoot requires no container daemon or user namespaces. It is not a sandbox.

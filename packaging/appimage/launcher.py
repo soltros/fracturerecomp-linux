@@ -80,9 +80,9 @@ class BuildProgress(tk.Canvas):
 
 
 class Launcher:
-    def __init__(self, root, state_dir=Path('/work')):
+    def __init__(self, root, state_dir=None):
         self.root = root
-        self.state_dir = Path(state_dir)
+        self.state_dir = Path(state_dir or os.environ.get('FRACTURE_NATIVE_DATA', '/work'))
         self.process = None
         self.operation = None
         self.cancelled = False
@@ -328,7 +328,10 @@ class Launcher:
 
     def start(self, args, status):
         try:
-            self.process = subprocess.Popen([sys.executable, '-u', str(HERE / 'builder.py'), *args],
+            command = ([str(Path(os.environ['APPDIR']) / 'AppRun'), *args]
+                       if os.environ.get('FRACTURE_NATIVE_DATA')
+                       else [sys.executable, '-u', str(HERE / 'builder.py'), *args])
+            self.process = subprocess.Popen(command,
                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                             text=True, errors='replace', start_new_session=True)
         except OSError as error:

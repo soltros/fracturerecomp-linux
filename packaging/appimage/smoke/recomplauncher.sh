@@ -18,19 +18,16 @@ test -f "$RECOMPLAUNCHER_DATA/logs/prepare.log"
 test ! -f "$RECOMPLAUNCHER_DATA/prepared.json"
 # Synthetic completed build: no real game assets or skipped input validation.
 mkdir -p "$RECOMPLAUNCHER_DATA/cache/fixture" "$RECOMPLAUNCHER_DATA/game"
-cat > "$RECOMPLAUNCHER_DATA/cache/fixture/fracture" <<'GAME'
-#!/bin/sh
-test "$RECOMPLAUNCHER_DATA" = /work
-test "$1" = --game_data_root=/work/game
-printf 'portable game launched\n' > /work/logs/portable-launch.log
-GAME
+cp "$FRACTURE_BUILDER_DATA/toolchain-smoke/native-game" "$RECOMPLAUNCHER_DATA/cache/fixture/fracture"
+export FRACTURE_SMOKE_LOG="$RECOMPLAUNCHER_DATA/logs/portable-launch.log"
+export FRACTURE_SMOKE_GAME="$RECOMPLAUNCHER_DATA/game"
 chmod +x "$RECOMPLAUNCHER_DATA/cache/fixture/fracture"
 printf '{"binary":"/work/cache/fixture/fracture","game":"/work/game"}\n' > "$RECOMPLAUNCHER_DATA/last-build.json"
 printf '{}\n' > "$RECOMPLAUNCHER_DATA/prepared.json"
 ln -s cache/fixture "$RECOMPLAUNCHER_DATA/game-build"
 printf 'fullscreen = false\n# Preserved setting\n' > "$RECOMPLAUNCHER_DATA/settings.toml"
 "$install/AppRun" --play --data "$RECOMPLAUNCHER_DATA"
-grep -q 'portable game launched' "$RECOMPLAUNCHER_DATA/logs/portable-launch.log"
+grep -q 'native game launched' "$RECOMPLAUNCHER_DATA/logs/portable-launch.log"
 test ! -d "$RECOMPLAUNCHER_DATA/runtime"
 test ! -f "$RECOMPLAUNCHER_DATA/launch-fracture"
 grep -q '# Preserved setting' "$RECOMPLAUNCHER_DATA/settings.toml"
@@ -39,6 +36,8 @@ mv "$install" /tmp/fracture-recomplauncher-moved
 install=/tmp/fracture-recomplauncher-moved
 export APPDIR="$install" ARGV0="$install/AppRun" RECOMPLAUNCHER_DATA="$install/recompdata"
 export TMPDIR="$install/.recomplauncher-tmp"
+export FRACTURE_SMOKE_LOG="$RECOMPLAUNCHER_DATA/logs/portable-launch.log"
+export FRACTURE_SMOKE_GAME="$RECOMPLAUNCHER_DATA/game"
 "$install/AppRun" --play
-grep -q 'portable game launched' "$RECOMPLAUNCHER_DATA/logs/portable-launch.log"
+grep -q 'native game launched' "$RECOMPLAUNCHER_DATA/logs/portable-launch.log"
 echo 'RecompLauncher extracted-install setup, launch, and relocation checks passed'
